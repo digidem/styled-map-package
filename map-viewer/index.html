@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Styled Map Package Viewer</title>
+    <meta
+      property="og:description"
+      content="A simple viewer for Styled Map Package files."
+    />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body,
+      #map {
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <script type="module">
+      import { bboxPolygon } from 'https://esm.run/@turf/bbox-polygon@7'
+      import { polygon } from 'https://esm.run/@turf/helpers@7'
+      import maplibregl from 'https://esm.run/maplibre-gl@4'
+      import 'https://esm.run/maplibre-gl@4/dist/maplibre-gl.css'
+
+      const map = new maplibregl.Map({
+        container: 'map',
+        style: 'style.json',
+      })
+
+      map.on('error', (e) => {
+        if (
+          e.error.message.includes(`Not Found (404): ${window.location.href}s/`)
+        ) {
+          return // no-op for 404 errors on sources
+        }
+        console.error(e.error)
+      })
+
+      // Display bounds of offline tiles on the map
+      map.on('styledata', (ev) => {
+        // @ts-ignore
+        const bounds = ev.style?.stylesheet?.metadata?.['smp:bounds']
+        if (!bounds) return
+        map.fitBounds(bounds, { padding: 20 })
+        const boundsPolygon = bboxPolygon(bounds)
+        const boundsWindow = polygon([
+          bboxPolygon([-180, -85, 180, 85]).geometry.coordinates[0],
+          boundsPolygon.geometry.coordinates[0].reverse(),
+        ])
+        map.addSource('bounds', {
+          type: 'geojson',
+          data: boundsPolygon,
+        })
+        map.addSource('bounds-window', {
+          type: 'geojson',
+          data: boundsWindow,
+        })
+        map.addLayer({
+          id: 'bounds-fill',
+          type: 'fill',
+          source: 'bounds-window',
+          layout: {},
+          paint: {
+            'fill-color': '#000000',
+            'fill-opacity': 0.5,
+          },
+        })
+        map.addLayer({
+          id: 'bounds',
+          type: 'line',
+          source: 'bounds',
+          layout: {},
+          paint: {
+            'line-color': '#7fff0f',
+            'line-opacity': 0.6,
+            'line-width': 3,
+          },
+        })
+      })
+    </script>
+  </body>
+</html>
