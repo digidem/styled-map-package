@@ -9,5 +9,5 @@ smp download  --bbox '-180,-80,180,80' -z 5 https://demotiles.maplibre.org/style
 ```
 
 ```sh
-smp serve demotiles.smp -o
+smp view demotiles.smp -o
 ```
