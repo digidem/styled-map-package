@@ -22,7 +22,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "@fastify/static": "^7.0.4",
     "@mapbox/sphericalmercator": "^1.2.0",
