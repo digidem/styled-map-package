@@ -4,10 +4,17 @@ A Styled Map Package (`.smp`) file is a Zip archive containing all the resources
 
 ## Usage
 
-```sh
-smp download  --bbox '-180,-80,180,80' -z 5 https://demotiles.maplibre.org/style.json -o demotiles.smp
-```
+Download an online map to a styled map package file, specifying the bounding box (west, south, east, north) and max zoom level.
 
 ```sh
-smp view demotiles.smp -o
+smp download https://demotiles.maplibre.org/style.json \
+  --bbox '-180,-80,180,80' \
+  --zoom 5 \
+  --output demotiles.smp
+```
+
+Start a server and open in the default browser.
+
+```sh
+smp view demotiles.smp --open
 ```
