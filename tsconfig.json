@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2021",
-    "lib": ["ES2021", "dom"],
+    "lib": ["ES2022", "dom"],
     "strict": true,
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
