@@ -1,4 +1,4 @@
-#!/usr/bin/node
+#!/usr/bin/env node
 import fastifyStatic from '@fastify/static'
 import { Command } from 'commander'
 import fastify from 'fastify'

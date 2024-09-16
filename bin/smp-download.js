@@ -1,4 +1,4 @@
-#!/usr/bin/node
+#!/usr/bin/env node
 import { Command, InvalidArgumentError } from 'commander'
 import fs from 'fs'
 import { pipeline } from 'stream/promises'
