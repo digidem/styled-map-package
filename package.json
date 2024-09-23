@@ -47,6 +47,7 @@
     "pretty-bytes": "^6.1.1",
     "pretty-ms": "^9.1.0",
     "readable-stream": "^4.5.2",
+    "temp-dir": "^3.0.0",
     "yauzl-promise": "^4.0.0",
     "yocto-queue": "^1.1.1"
   },
