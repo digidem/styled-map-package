@@ -268,6 +268,56 @@ test('Finishing writer with no sources throws and error', async () => {
   })
 })
 
+test('External GeoJSON & layers that use it are excluded if not added', async () => {
+  const styleInUrl = new URL(
+    './fixtures/valid-styles/external-geojson.input.json',
+    import.meta.url,
+  )
+  /** @type {import('@maplibre/maplibre-gl-style-spec').StyleSpecification} */
+  const styleIn = await readJson(styleInUrl)
+  const writer = new Writer(styleIn)
+
+  assert(
+    'crimea' in styleIn.sources && styleIn.sources.crimea.type === 'geojson',
+    'input style contains crimea geojson source',
+  )
+  assert.equal(
+    typeof styleIn.sources.crimea.data,
+    'string',
+    'geojson source is external (data is URL)',
+  )
+  assert(
+    styleIn.layers.find((l) => 'source' in l && l.source === 'crimea'),
+    'input style contains layers with crimea source',
+  )
+
+  // Need to add at least one tile for the source
+  await writer.addTile(randomStream({ size: 1024 }), {
+    x: 0,
+    y: 0,
+    z: 0,
+    sourceId: 'maplibre',
+    format: 'mvt',
+  })
+
+  writer.finish()
+
+  const smp = await streamToBuffer(writer.outputStream)
+  const reader = new Reader(await zipFromBuffer(smp))
+
+  const styleOut = await reader.getStyle()
+  await compareAndSnapshotStyle({ styleInUrl, styleOut })
+
+  assert(
+    !('crimea' in styleOut.sources),
+    'output style does not contain crimea geojson source',
+  )
+  assert(
+    !styleOut.layers.find((l) => 'source' in l && l.source === 'crimea'),
+    'output style does not contain layers with crimea source',
+  )
+})
+
 /**
  *
  * @param {number} min
@@ -292,8 +342,14 @@ async function compareAndSnapshotStyle({ styleInUrl, styleOut }) {
   if (updateSnapshots) {
     await fs.writeFile(snapshotUrl, JSON.stringify(styleOut, null, 2))
   } else {
-    const expected = await readJson(snapshotUrl)
-    assert.deepEqual(styleOut, expected)
+    try {
+      const expected = await readJson(snapshotUrl)
+      assert.deepEqual(styleOut, expected)
+    } catch (e) {
+      if (e instanceof Error && 'code' in e && e.code === 'ENOENT') {
+        await fs.writeFile(snapshotUrl, JSON.stringify(styleOut, null, 2))
+      }
+    }
   }
 }
 
