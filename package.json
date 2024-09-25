@@ -27,6 +27,7 @@
     "@fastify/static": "^7.0.4",
     "@mapbox/sphericalmercator": "^1.2.0",
     "@maplibre/maplibre-gl-style-spec": "^20.3.1",
+    "@turf/bbox": "^7.1.0",
     "@turf/helpers": "^7.1.0",
     "ansi-diff": "^1.2.0",
     "archiver": "^7.0.1",
