@@ -15,6 +15,7 @@ export type InputSource = Extract<
   { type: (typeof SUPPORTED_SOURCE_TYPES)[number] }
 >
 export type SMPSource = TransformInputSource<InputSource>
+export type SMPStyle = TransformStyle<StyleSpecification>
 
 export type TransformInputSource<T extends InputSource> =
   T extends GeoJSONSourceSpecification
@@ -28,6 +29,17 @@ export type TransformInputSource<T extends InputSource> =
           'tiles' | 'bounds' | 'minzoom' | 'maxzoom'
         >
       : never
+
+type TransformStyle<T extends StyleSpecification> = Omit<T, 'sources'> & {
+  metadata: {
+    'smp:bounds': [number, number, number, number]
+    'smp:maxzoom': 0
+    'smp:sourceFolders': { [_: string]: string }
+  }
+  sources: {
+    [_: string]: SMPSource
+  }
+}
 
 export type VectorTileSource = {
   type: 'vector'
