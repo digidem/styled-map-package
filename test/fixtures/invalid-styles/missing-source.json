@@ -1,0 +1,10 @@
+{
+  "version": 8,
+  "layers": [
+    {
+      "id": "vector-source-missing",
+      "type": "line",
+      "source": "vector-source-id"
+    }
+  ]
+}

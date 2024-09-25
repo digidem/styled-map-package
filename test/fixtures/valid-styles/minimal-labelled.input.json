@@ -1,0 +1,37 @@
+{
+  "name": "MapLibre",
+  "zoom": 0.8619833357855968,
+  "pitch": 0,
+  "center": [17.65431710431244, 32.954120326746775],
+  "glyphs": "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+  "layers": [
+    {
+      "id": "countries-label",
+      "type": "symbol",
+      "paint": {
+        "text-color": "rgba(8, 37, 77, 1)",
+        "text-halo-color": "rgba(255, 255, 255, 1)"
+      },
+      "filter": ["all"],
+      "layout": {
+        "text-font": ["Open Sans Semibold"],
+        "text-size": 12,
+        "text-field": "{NAME}",
+        "visibility": "visible",
+        "text-max-width": 10
+      },
+      "source": "maplibre",
+      "maxzoom": 24,
+      "minzoom": 2,
+      "source-layer": "centroids"
+    }
+  ],
+  "bearing": 0,
+  "sources": {
+    "maplibre": {
+      "url": "https://demotiles.maplibre.org/tiles/tiles.json",
+      "type": "vector"
+    }
+  },
+  "version": 8
+}

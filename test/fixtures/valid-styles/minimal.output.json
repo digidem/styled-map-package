@@ -1,0 +1,92 @@
+{
+  "name": "MapLibre",
+  "zoom": 3,
+  "pitch": 0,
+  "center": [
+    56.25,
+    10.53212169788165
+  ],
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#D8F2FF"
+      },
+      "filter": [
+        "all"
+      ],
+      "layout": {
+        "visibility": "visible"
+      },
+      "maxzoom": 24
+    },
+    {
+      "id": "coastline",
+      "type": "line",
+      "paint": {
+        "line-blur": 0.5,
+        "line-color": "#198EC8",
+        "line-width": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          0,
+          2,
+          6,
+          6,
+          14,
+          9,
+          22,
+          18
+        ]
+      },
+      "filter": [
+        "all"
+      ],
+      "layout": {
+        "line-cap": "round",
+        "line-join": "round",
+        "visibility": "visible"
+      },
+      "source": "maplibre",
+      "maxzoom": 24,
+      "minzoom": 0,
+      "source-layer": "countries"
+    }
+  ],
+  "bearing": 0,
+  "sources": {
+    "maplibre": {
+      "type": "vector",
+      "minzoom": 0,
+      "maxzoom": 5,
+      "bounds": [
+        -45,
+        -55.776573018667676,
+        157.5,
+        76.84081641443098
+      ],
+      "tiles": [
+        "smp://maps.v1/s/0/{z}/{x}/{y}.mvt.gz"
+      ]
+    }
+  },
+  "version": 8,
+  "metadata": {
+    "smp:bounds": [
+      -45,
+      -55.776573018667676,
+      157.5,
+      76.84081641443098
+    ],
+    "smp:maxzoom": 5,
+    "smp:sourceFolders": {
+      "maplibre": "0"
+    }
+  }
+}
