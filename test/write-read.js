@@ -5,7 +5,10 @@ import { fromBuffer as zipFromBuffer } from 'yauzl-promise'
 
 import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
-import { buffer as streamToBuffer } from 'node:stream/consumers'
+import {
+  buffer as streamToBuffer,
+  json as streamToJson,
+} from 'node:stream/consumers'
 import { test } from 'node:test'
 
 import { Reader, Writer } from '../lib/index.js'
@@ -316,6 +319,90 @@ test('External GeoJSON & layers that use it are excluded if not added', async ()
     !styleOut.layers.find((l) => 'source' in l && l.source === 'crimea'),
     'output style does not contain layers with crimea source',
   )
+})
+
+test('Missing sprites throws an error', async () => {
+  const styleInUrl = new URL(
+    './fixtures/valid-styles/minimal-sprites.input.json',
+    import.meta.url,
+  )
+  /** @type {import('@maplibre/maplibre-gl-style-spec').StyleSpecification} */
+  const styleIn = await readJson(styleInUrl)
+  const writer = new Writer(styleIn)
+
+  assert(typeof styleIn.sprite === 'string', 'input style has sprite URL')
+
+  // Need to add at least one tile for the source
+  await writer.addTile(randomStream({ size: 1024 }), {
+    x: 0,
+    y: 0,
+    z: 0,
+    sourceId: 'openmaptiles',
+    format: 'mvt',
+  })
+
+  await assert.rejects(async () => writer.finish(), {
+    message: /Missing sprite/,
+  })
+})
+
+test('Can write and read sprites', async () => {
+  const styleInUrl = new URL(
+    './fixtures/valid-styles/minimal-sprites.input.json',
+    import.meta.url,
+  )
+  /** @type {import('@maplibre/maplibre-gl-style-spec').StyleSpecification} */
+  const styleIn = await readJson(styleInUrl)
+  const writer = new Writer(styleIn)
+
+  assert(typeof styleIn.sprite === 'string', 'input style has sprite URL')
+
+  // Need to add at least one tile for the source
+  await writer.addTile(randomStream({ size: 1024 }), {
+    x: 0,
+    y: 0,
+    z: 0,
+    sourceId: 'openmaptiles',
+    format: 'mvt',
+  })
+
+  const spriteImageStream = randomStream({ size: random(1024, 2048) }).pipe(
+    new DigestStream('md5'),
+  )
+  const spriteLayoutIn = {
+    airfield_11: {
+      height: 17,
+      pixelRatio: 1,
+      width: 17,
+      x: 21,
+      y: 0,
+    },
+  }
+  await writer.addSprite({
+    png: spriteImageStream,
+    json: JSON.stringify(spriteLayoutIn),
+  })
+  const spriteImageHash = await spriteImageStream.digest('hex')
+
+  writer.finish()
+
+  const smp = await streamToBuffer(writer.outputStream)
+  const reader = new Reader(await zipFromBuffer(smp))
+  const readerHelper = new ReaderHelper(reader)
+
+  const styleOut = await reader.getStyle('')
+  await compareAndSnapshotStyle({ styleInUrl, styleOut })
+
+  const spriteImageHashOut = await readerHelper.getSpriteHash({ ext: 'png' })
+  const spriteJsonResource = await reader.getResource(styleOut.sprite + '.json')
+  assert.equal(
+    spriteJsonResource.contentType,
+    'application/json; charset=utf-8',
+  )
+  const spriteLayoutOut = await streamToJson(spriteJsonResource.stream)
+
+  assert.equal(spriteImageHashOut, spriteImageHash, 'Sprite image is the same')
+  assert.deepEqual(spriteLayoutOut, spriteLayoutIn, 'Sprite layout is the same')
 })
 
 /**
