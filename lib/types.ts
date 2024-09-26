@@ -3,6 +3,9 @@ import type {
   StyleSpecification,
   ValidationError,
   GeoJSONSourceSpecification,
+  VectorSourceSpecification,
+  RasterSourceSpecification,
+  RasterDEMSourceSpecification,
 } from '@maplibre/maplibre-gl-style-spec'
 import type { GeoJSON } from 'geojson'
 import type { Readable } from 'stream'
@@ -14,23 +17,49 @@ export type InputSource = Extract<
   SourceSpecification,
   { type: (typeof SUPPORTED_SOURCE_TYPES)[number] }
 >
-export type SMPSource = TransformInputSource<InputSource>
-export type SMPStyle = TransformStyle<StyleSpecification>
-
-export type TransformInputSource<T extends InputSource> =
+type TransformInlinedSource<T extends SourceSpecification> =
   T extends GeoJSONSourceSpecification
-    ? Omit<T, 'data'> & {
-        // A geojson source in an SMP cannot reference a URL, data must be inlined.
-        data: SetRequiredIfPresent<GeoJSON, 'bbox'>
-      }
-    : T extends RasterTileSource | VectorTileSource
-      ? SetRequired<
-          OmitUnion<T, 'url'>,
-          'tiles' | 'bounds' | 'minzoom' | 'maxzoom'
-        >
-      : never
+    ? OmitUnion<T, 'data'> & { data: GeoJSON }
+    : T extends
+          | VectorSourceSpecification
+          | RasterSourceSpecification
+          | RasterDEMSourceSpecification
+      ? SetRequired<OmitUnion<T, 'url'>, 'tiles'>
+      : T
+/**
+ * This is a slightly stricter version of SourceSpecification that requires
+ * sources to be inlined (e.g. no urls to TileJSON or GeoJSON files).
+ */
+export type InlinedSource = TransformInlinedSource<SourceSpecification>
+type SupportedInlinedSource = Extract<
+  InlinedSource,
+  { type: (typeof SUPPORTED_SOURCE_TYPES)[number] }
+>
+/**
+ * This is a slightly stricter version of StyleSpecification that requires
+ * sources to be inlined (e.g. no urls to TileJSON or GeoJSON files).
+ */
+export type StyleInlinedSources = Omit<StyleSpecification, 'sources'> & {
+  sources: {
+    [_: string]: InlinedSource
+  }
+}
 
-type TransformStyle<T extends StyleSpecification> = Omit<T, 'sources'> & {
+export type SMPSource = TransformSMPInputSource<SupportedInlinedSource>
+/**
+ * This is a slightly stricter version of StyleSpecification that is provided in
+ * a Styled Map Package. Tile sources must have tile URLs inlined (they cannot
+ * refer to a TileJSON url), and they must have bounds, minzoom, and maxzoom.
+ * GeoJSON sources must have inlined GeoJSON (not a URL to a GeoJSON file).
+ */
+export type SMPStyle = TransformSMPStyle<StyleSpecification>
+
+export type TransformSMPInputSource<T extends SupportedInlinedSource> =
+  T extends RasterSourceSpecification | VectorSourceSpecification
+    ? SetRequired<T, 'bounds' | 'minzoom' | 'maxzoom'>
+    : T
+
+type TransformSMPStyle<T extends StyleSpecification> = Omit<T, 'sources'> & {
   metadata: {
     'smp:bounds': [number, number, number, number]
     'smp:maxzoom': 0
@@ -40,29 +69,6 @@ type TransformStyle<T extends StyleSpecification> = Omit<T, 'sources'> & {
     [_: string]: SMPSource
   }
 }
-
-export type VectorTileSource = {
-  type: 'vector'
-  url?: string
-  tiles?: Array<string>
-  bounds?: [number, number, number, number]
-  scheme?: 'xyz' | 'tms'
-  minzoom?: number
-  maxzoom?: number
-}
-
-export type RasterTileSource = {
-  type: 'raster'
-  url?: string
-  tiles?: Array<string>
-  bounds?: [number, number, number, number]
-  minzoom?: number
-  maxzoom?: number
-  tileSize?: number
-  scheme?: 'xyz' | 'tms'
-}
-
-export type TileSource = VectorTileSource | RasterTileSource
 
 export interface ValidateStyle {
   (style: unknown): style is StyleSpecification
