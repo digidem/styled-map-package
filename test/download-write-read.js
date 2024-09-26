@@ -31,7 +31,7 @@ test('Everything written can be read', async (t) => {
   const smpFilePath = tempFile(t)
   const smpReadStream = download({
     styleUrl: TEST_MAP_STYLE,
-    bbox: TEST_MAP_AREA,
+    bbox: [...TEST_MAP_AREA],
     maxzoom: 10,
   })
   await pipeline(smpReadStream, fs.createWriteStream(smpFilePath))

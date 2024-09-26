@@ -7,7 +7,7 @@ import type {
   RasterSourceSpecification,
   RasterDEMSourceSpecification,
 } from '@maplibre/maplibre-gl-style-spec'
-import type { GeoJSON } from 'geojson'
+import type { GeoJSON, BBox } from 'geojson'
 import type { Readable } from 'stream'
 import type { Except, SetRequired, Simplify } from 'type-fest'
 
@@ -55,9 +55,11 @@ export type SMPSource = TransformSMPInputSource<SupportedInlinedSource>
 export type SMPStyle = TransformSMPStyle<StyleSpecification>
 
 export type TransformSMPInputSource<T extends SupportedInlinedSource> =
-  T extends RasterSourceSpecification | VectorSourceSpecification
-    ? SetRequired<T, 'bounds' | 'minzoom' | 'maxzoom'>
-    : T
+  T extends GeoJSONSourceSpecification
+    ? T & { data: { bbox: BBox } }
+    : T extends RasterSourceSpecification | VectorSourceSpecification
+      ? SetRequired<T, 'bounds' | 'minzoom' | 'maxzoom'>
+      : T
 
 type TransformSMPStyle<T extends StyleSpecification> = Omit<T, 'sources'> & {
   metadata: {
