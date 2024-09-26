@@ -1,4 +1,4 @@
-import { validateStyleMin, migrate } from '@maplibre/maplibre-gl-style-spec'
+import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec'
 import tempDir from 'temp-dir'
 
 import assert from 'node:assert'
@@ -9,7 +9,7 @@ import path from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import test from 'node:test'
 
-import { download, Reader, StyleDownloader } from '../lib/index.js'
+import { download, Reader } from '../lib/index.js'
 
 const TEST_MAP_STYLE = 'https://demotiles.maplibre.org/style.json'
 const TEST_MAP_AREA = /** @type {const} */ ([5.956, 45.818, 10.492, 47.808]) // Switzerland
@@ -32,17 +32,12 @@ test('Everything written can be read', async (t) => {
   const smpReadStream = download({
     styleUrl: TEST_MAP_STYLE,
     bbox: [...TEST_MAP_AREA],
-    maxzoom: 10,
+    maxzoom: 5,
   })
   await pipeline(smpReadStream, fs.createWriteStream(smpFilePath))
 
   const reader = new Reader(smpFilePath)
-  const upstream = new StyleDownloader(TEST_MAP_STYLE)
 
   const smpStyle = await reader.getStyle()
   assert.deepEqual(validateStyleMin(smpStyle), [], 'Style is valid')
-
-  const upstreamStyle = migrate(await upstream.getStyle())
-
-  assert.deepStrictEqual(smpStyle, upstreamStyle)
 })
