@@ -366,7 +366,10 @@ test('Can write and read sprites', async () => {
     format: 'mvt',
   })
 
-  const spriteImageStream = randomStream({ size: random(1024, 2048) }).pipe(
+  const sprite1xImageStream = randomStream({ size: random(1024, 2048) }).pipe(
+    new DigestStream('md5'),
+  )
+  const sprite2xImageStream = randomStream({ size: random(1024, 2048) }).pipe(
     new DigestStream('md5'),
   )
   const spriteLayoutIn = {
@@ -379,10 +382,16 @@ test('Can write and read sprites', async () => {
     },
   }
   await writer.addSprite({
-    png: spriteImageStream,
+    png: sprite1xImageStream,
     json: JSON.stringify(spriteLayoutIn),
   })
-  const spriteImageHash = await spriteImageStream.digest('hex')
+  const sprite1xImageHash = await sprite1xImageStream.digest('hex')
+  await writer.addSprite({
+    png: sprite2xImageStream,
+    json: JSON.stringify(spriteLayoutIn),
+    pixelRatio: 2,
+  })
+  const sprite2xImageHash = await sprite2xImageStream.digest('hex')
 
   writer.finish()
 
@@ -393,7 +402,11 @@ test('Can write and read sprites', async () => {
   const styleOut = await reader.getStyle('')
   await compareAndSnapshotStyle({ styleInUrl, styleOut })
 
-  const spriteImageHashOut = await readerHelper.getSpriteHash({ ext: 'png' })
+  const sprite1xImageHashOut = await readerHelper.getSpriteHash({ ext: 'png' })
+  const sprite2xImageHashOut = await readerHelper.getSpriteHash({
+    ext: 'png',
+    pixelRatio: 2,
+  })
   const spriteJsonResource = await reader.getResource(styleOut.sprite + '.json')
   assert.equal(
     spriteJsonResource.contentType,
@@ -401,7 +414,16 @@ test('Can write and read sprites', async () => {
   )
   const spriteLayoutOut = await streamToJson(spriteJsonResource.stream)
 
-  assert.equal(spriteImageHashOut, spriteImageHash, 'Sprite image is the same')
+  assert.equal(
+    sprite1xImageHashOut,
+    sprite1xImageHash,
+    'Sprite image is the same',
+  )
+  assert.equal(
+    sprite2xImageHashOut,
+    sprite2xImageHash,
+    'Sprite @2x image is the same',
+  )
   assert.deepEqual(spriteLayoutOut, spriteLayoutIn, 'Sprite layout is the same')
 })
 

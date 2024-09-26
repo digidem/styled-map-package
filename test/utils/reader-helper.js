@@ -50,21 +50,22 @@ export class ReaderHelper {
     return this.#digest(glyphPath)
   }
 
-  /** @param {{ id?: string, pixelRatio?: `@${number}x` | ``, ext: 'json' | 'png'}} opts */
-  async getSpriteHash({ id, pixelRatio = '', ext }) {
+  /** @param {{ id?: string, pixelRatio?: 1 | 2 | 3, ext: 'json' | 'png'}} opts */
+  async getSpriteHash({ id, pixelRatio = 1, ext }) {
     const style = this.#style || (this.#style = await this.#reader.getStyle(''))
     if (!style.sprite) {
       throw new Error('No sprites defined in style')
     }
+    const pixelRatioString = pixelRatio === 1 ? '' : `@${pixelRatio}x`
     let spritePath
     if (typeof style.sprite === 'string') {
-      spritePath = style.sprite + pixelRatio + '.' + ext
+      spritePath = style.sprite + pixelRatioString + '.' + ext
     } else {
       const sprite = style.sprite.find((s) => s.id === (id || 'default'))
       if (!sprite) {
         throw new Error(`Sprite not found: ${id}`)
       }
-      spritePath = sprite.url + pixelRatio + '.' + ext
+      spritePath = sprite.url + pixelRatioString + '.' + ext
     }
     return this.#digest(spritePath)
   }
