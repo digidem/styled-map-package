@@ -49,24 +49,28 @@ program
       const west = await number({
         message: 'Bounding box west',
         required: true,
+        step: 'any',
         min: -180,
         max: 180,
       })
       const south = await number({
         message: 'Bounding box south',
         required: true,
+        step: 'any',
         min: -90,
         max: 90,
       })
       const east = await number({
         message: 'Bounding box east',
         required: true,
+        step: 'any',
         min: -180,
         max: 180,
       })
       const north = await number({
         message: 'Bounding box north',
         required: true,
+        step: 'any',
         min: -90,
         max: 90,
       })
