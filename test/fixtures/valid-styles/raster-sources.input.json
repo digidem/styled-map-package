@@ -1,0 +1,33 @@
+{
+  "version": 8,
+  "sources": {
+    "jpg-tiles": {
+      "type": "raster",
+      "tiles": ["https://example1.com/{z}/{x}/{y}.jpg"],
+      "tileSize": 256
+    },
+    "png-tiles": {
+      "type": "raster",
+      "tiles": ["https://example2.com/{z}/{x}/{y}.png"],
+      "tileSize": 256
+    }
+  },
+  "layers": [
+    {
+      "id": "jpg-tiles",
+      "type": "raster",
+      "source": "jpg-tiles",
+      "minzoom": 0,
+      "maxzoom": 22
+    },
+    {
+      "id": "png-tiles",
+      "type": "raster",
+      "source": "png-tiles",
+      "minzoom": 0,
+      "maxzoom": 22
+    }
+  ],
+  "center": [-74.5, 40],
+  "zoom": 2
+}

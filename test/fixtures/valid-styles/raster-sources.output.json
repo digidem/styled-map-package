@@ -1,0 +1,69 @@
+{
+  "version": 8,
+  "sources": {
+    "png-tiles": {
+      "type": "raster",
+      "tileSize": 256,
+      "minzoom": 0,
+      "maxzoom": 0,
+      "bounds": [
+        -180,
+        -85.051129,
+        180,
+        85.051129
+      ],
+      "tiles": [
+        "smp://maps.v1/s/0/{z}/{x}/{y}.png"
+      ]
+    },
+    "jpg-tiles": {
+      "type": "raster",
+      "tileSize": 256,
+      "minzoom": 0,
+      "maxzoom": 0,
+      "bounds": [
+        -180,
+        -85.051129,
+        180,
+        85.051129
+      ],
+      "tiles": [
+        "smp://maps.v1/s/1/{z}/{x}/{y}.jpg"
+      ]
+    }
+  },
+  "layers": [
+    {
+      "id": "jpg-tiles",
+      "type": "raster",
+      "source": "jpg-tiles",
+      "minzoom": 0,
+      "maxzoom": 22
+    },
+    {
+      "id": "png-tiles",
+      "type": "raster",
+      "source": "png-tiles",
+      "minzoom": 0,
+      "maxzoom": 22
+    }
+  ],
+  "center": [
+    0,
+    0
+  ],
+  "zoom": 0,
+  "metadata": {
+    "smp:bounds": [
+      -180,
+      -85.051129,
+      180,
+      85.051129
+    ],
+    "smp:maxzoom": 0,
+    "smp:sourceFolders": {
+      "png-tiles": "0",
+      "jpg-tiles": "1"
+    }
+  }
+}

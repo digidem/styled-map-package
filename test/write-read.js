@@ -16,6 +16,7 @@ import { tileIterator } from '../lib/tile-downloader.js'
 import { unionBBox } from '../lib/utils/geo.js'
 import { assertBboxEqual } from './utils/assert-bbox-equal.js'
 import { DigestStream } from './utils/digest-stream.js'
+import { randomImageStream } from './utils/image-streams.js'
 import { ReaderHelper } from './utils/reader-helper.js'
 
 /** @import { BBox } from '../lib/utils/geo.js' */
@@ -529,6 +530,47 @@ test('Can write and read style with multiple sprites', async () => {
     spriteRoadsignsLayoutIn,
     'Sprite layout is the same',
   )
+})
+
+test('Raster tiles write and read', async () => {
+  const styleInUrl = new URL(
+    './fixtures/valid-styles/raster-sources.input.json',
+    import.meta.url,
+  )
+  const styleIn = await readJson(styleInUrl)
+  const writer = new Writer(styleIn)
+
+  const pngStream = randomImageStream({
+    width: 256,
+    height: 256,
+    format: 'png',
+  }).pipe(new DigestStream('md5'))
+  const jpgStream = randomImageStream({
+    width: 256,
+    height: 256,
+    format: 'jpg',
+  }).pipe(new DigestStream('md5'))
+  const pngTileId = { x: 0, y: 0, z: 0, sourceId: 'png-tiles' }
+  const jpgTileId = { x: 0, y: 0, z: 0, sourceId: 'jpg-tiles' }
+  await writer.addTile(pngStream, { ...pngTileId, format: 'png' })
+  await writer.addTile(jpgStream, { ...jpgTileId, format: 'jpg' })
+  const pngTileHash = await pngStream.digest('hex')
+  const jpgTileHash = await jpgStream.digest('hex')
+
+  writer.finish()
+
+  const smp = await streamToBuffer(writer.outputStream)
+  const reader = new Reader(await zipFromBuffer(smp))
+  const readerHelper = new ReaderHelper(reader)
+
+  const styleOut = await reader.getStyle()
+  compareAndSnapshotStyle({ styleInUrl, styleOut })
+
+  const pngTileHashOut = await readerHelper.getTileHash(pngTileId)
+  const jpgTileHashOut = await readerHelper.getTileHash(jpgTileId)
+
+  assert.equal(pngTileHashOut, pngTileHash, 'PNG tile is the same')
+  assert.equal(jpgTileHashOut, jpgTileHash, 'JPG tile is the same')
 })
 
 /**

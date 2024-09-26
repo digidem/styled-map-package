@@ -13,10 +13,10 @@ import randomBytesReadableStream from 'random-bytes-readable-stream'
  * @param {object} options
  * @param {number} options.width
  * @param {number} options.height
- * @param {'png' | 'jpg'} [options.format]
+ * @param {'png' | 'jpg'} options.format
  * @returns
  */
-export function randomImageStream({ width, height, format = 'png' }) {
+export function randomImageStream({ width, height, format }) {
   const encoder =
     format === 'jpg'
       ? new JPEGEncoder(width, height, { colorSpace: 'rgb', quality: 30 })
