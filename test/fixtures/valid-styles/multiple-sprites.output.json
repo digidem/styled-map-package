@@ -1,0 +1,128 @@
+{
+  "version": 8,
+  "name": "OSM Bright",
+  "sources": {
+    "openmaptiles": {
+      "type": "vector",
+      "minzoom": 0,
+      "maxzoom": 0,
+      "bounds": [
+        -180,
+        -85.051129,
+        180,
+        85.051129
+      ],
+      "tiles": [
+        "/s/0/{z}/{x}/{y}.mvt.gz"
+      ]
+    }
+  },
+  "sprite": [
+    {
+      "id": "roadsigns",
+      "url": "/sprites/roadsigns/sprite"
+    },
+    {
+      "id": "default",
+      "url": "/sprites/default/sprite"
+    }
+  ],
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#f8f4f0"
+      }
+    },
+    {
+      "id": "poi-level-1",
+      "type": "symbol",
+      "source": "openmaptiles",
+      "source-layer": "poi",
+      "minzoom": 14,
+      "filter": [
+        "all",
+        [
+          "==",
+          [
+            "geometry-type"
+          ],
+          "Point"
+        ],
+        [
+          "<=",
+          [
+            "get",
+            "rank"
+          ],
+          14
+        ],
+        [
+          "has",
+          "name"
+        ],
+        [
+          "any",
+          [
+            "!",
+            [
+              "has",
+              "level"
+            ]
+          ],
+          [
+            "case",
+            [
+              "==",
+              [
+                "typeof",
+                [
+                  "get",
+                  "level"
+                ]
+              ],
+              "number"
+            ],
+            [
+              "==",
+              [
+                "get",
+                "level"
+              ],
+              0
+            ],
+            false
+          ]
+        ]
+      ],
+      "layout": {
+        "icon-image": [
+          "concat",
+          [
+            "get",
+            "class"
+          ],
+          "_11"
+        ]
+      }
+    }
+  ],
+  "metadata": {
+    "smp:bounds": [
+      -180,
+      -85.051129,
+      180,
+      85.051129
+    ],
+    "smp:maxzoom": 0,
+    "smp:sourceFolders": {
+      "openmaptiles": "0"
+    }
+  },
+  "center": [
+    0,
+    0
+  ],
+  "zoom": 0
+}

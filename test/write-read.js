@@ -427,6 +427,110 @@ test('Can write and read sprites', async () => {
   assert.deepEqual(spriteLayoutOut, spriteLayoutIn, 'Sprite layout is the same')
 })
 
+test('Can write and read style with multiple sprites', async () => {
+  const styleInUrl = new URL(
+    './fixtures/valid-styles/multiple-sprites.input.json',
+    import.meta.url,
+  )
+  /** @type {import('@maplibre/maplibre-gl-style-spec').StyleSpecification} */
+  const styleIn = await readJson(styleInUrl)
+  const writer = new Writer(styleIn)
+
+  assert(Array.isArray(styleIn.sprite), 'input style has array of sprites')
+
+  // Need to add at least one tile for the source
+  await writer.addTile(randomStream({ size: 1024 }), {
+    x: 0,
+    y: 0,
+    z: 0,
+    sourceId: 'openmaptiles',
+    format: 'mvt',
+  })
+
+  const spriteRoadsignsImageStream = randomStream({
+    size: random(1024, 2048),
+  }).pipe(new DigestStream('md5'))
+  const spriteDefaultImageStream = randomStream({
+    size: random(1024, 2048),
+  }).pipe(new DigestStream('md5'))
+  const spriteRoadsignsLayoutIn = {
+    airfield_11: {
+      height: 17,
+      pixelRatio: 1,
+      width: 17,
+      x: 21,
+      y: 0,
+    },
+  }
+  const spriteDefaultLayoutIn = {
+    other_sprite: {
+      height: 17,
+      pixelRatio: 1,
+      width: 17,
+      x: 21,
+      y: 0,
+    },
+  }
+  await writer.addSprite({
+    png: spriteDefaultImageStream,
+    json: JSON.stringify(spriteDefaultLayoutIn),
+  })
+  const spriteDefaultImageHash = await spriteDefaultImageStream.digest('hex')
+  await writer.addSprite({
+    id: 'roadsigns',
+    png: spriteRoadsignsImageStream,
+    json: JSON.stringify(spriteRoadsignsLayoutIn),
+  })
+  const spriteRoadsignsImageHash =
+    await spriteRoadsignsImageStream.digest('hex')
+
+  writer.finish()
+
+  const smp = await streamToBuffer(writer.outputStream)
+  const reader = new Reader(await zipFromBuffer(smp))
+  const readerHelper = new ReaderHelper(reader)
+
+  const styleOut = await reader.getStyle('')
+  await compareAndSnapshotStyle({ styleInUrl, styleOut })
+
+  const spriteDefaultImageHashOut = await readerHelper.getSpriteHash({
+    ext: 'png',
+  })
+  const spriteRoadsignsImageHashOut = await readerHelper.getSpriteHash({
+    ext: 'png',
+    id: 'roadsigns',
+  })
+  // @ts-expect-error
+  const defaultUrl = styleOut.sprite.find((s) => s.id === 'default').url
+  // @ts-expect-error
+  const roadsignsUrl = styleOut.sprite.find((s) => s.id === 'roadsigns').url
+  const defaultJsonResource = await reader.getResource(defaultUrl + '.json')
+  const roadsignsJsonResource = await reader.getResource(roadsignsUrl + '.json')
+  const defaultLayoutOut = await streamToJson(defaultJsonResource.stream)
+  const roadsignsLayoutOut = await streamToJson(roadsignsJsonResource.stream)
+
+  assert.equal(
+    spriteDefaultImageHashOut,
+    spriteDefaultImageHash,
+    'Sprite image is the same',
+  )
+  assert.equal(
+    spriteRoadsignsImageHashOut,
+    spriteRoadsignsImageHash,
+    'Sprite @2x image is the same',
+  )
+  assert.deepEqual(
+    defaultLayoutOut,
+    spriteDefaultLayoutIn,
+    'Sprite layout is the same',
+  )
+  assert.deepEqual(
+    roadsignsLayoutOut,
+    spriteRoadsignsLayoutIn,
+    'Sprite layout is the same',
+  )
+})
+
 /**
  *
  * @param {number} min
