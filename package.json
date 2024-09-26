@@ -12,6 +12,7 @@
     "./download": "./lib/download.js"
   },
   "bin": {
+    "styled-map-package": "./bin/smp.js",
     "smp": "./bin/smp.js"
   },
   "type": "module",
