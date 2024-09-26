@@ -1,0 +1,93 @@
+{
+  "name": "MapLibre",
+  "zoom": 14,
+  "pitch": 0,
+  "center": [
+    0,
+    0
+  ],
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#D8F2FF"
+      },
+      "filter": [
+        "all"
+      ],
+      "layout": {
+        "visibility": "visible"
+      },
+      "maxzoom": 24
+    },
+    {
+      "id": "coastline",
+      "type": "line",
+      "paint": {
+        "line-blur": 0.5,
+        "line-color": "#198EC8",
+        "line-width": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          0,
+          2,
+          6,
+          6,
+          14,
+          9,
+          22,
+          18
+        ]
+      },
+      "filter": [
+        "all"
+      ],
+      "layout": {
+        "line-cap": "round",
+        "line-join": "round",
+        "visibility": "visible"
+      },
+      "source": "maplibre",
+      "maxzoom": 24,
+      "minzoom": 0,
+      "source-layer": "countries"
+    }
+  ],
+  "bearing": 0,
+  "sources": {
+    "maplibre": {
+      "type": "vector",
+      "minzoom": 0,
+      "maxzoom": 0,
+      "bounds": [
+        -180,
+        -85.051129,
+        180,
+        85.051129
+      ],
+      "tiles": [
+        "smp://maps.v1/s/1/{z}/{x}/{y}.mvt.gz"
+      ]
+    }
+  },
+  "version": 8,
+  "metadata": {
+    "smp:bounds": [
+      -180,
+      -85.051129,
+      180,
+      85.051129
+    ],
+    "smp:maxzoom": 16,
+    "smp:sourceFolders": {
+      "crimea": "0",
+      "maplibre": "1"
+    }
+  }
+}

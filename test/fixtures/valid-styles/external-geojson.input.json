@@ -1,0 +1,66 @@
+{
+  "name": "MapLibre",
+  "zoom": 0.8619833357855968,
+  "pitch": 0,
+  "center": [17.65431710431244, 32.954120326746775],
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#D8F2FF"
+      },
+      "filter": ["all"],
+      "layout": {
+        "visibility": "visible"
+      },
+      "maxzoom": 24
+    },
+    {
+      "id": "coastline",
+      "type": "line",
+      "paint": {
+        "line-blur": 0.5,
+        "line-color": "#198EC8",
+        "line-width": {
+          "stops": [
+            [0, 2],
+            [6, 6],
+            [14, 9],
+            [22, 18]
+          ]
+        }
+      },
+      "filter": ["all"],
+      "layout": {
+        "line-cap": "round",
+        "line-join": "round",
+        "visibility": "visible"
+      },
+      "source": "maplibre",
+      "maxzoom": 24,
+      "minzoom": 0,
+      "source-layer": "countries"
+    },
+    {
+      "id": "crimea-fill",
+      "type": "fill",
+      "source": "crimea",
+      "paint": {
+        "fill-color": "#D6C7FF"
+      }
+    }
+  ],
+  "bearing": 0,
+  "sources": {
+    "crimea": {
+      "type": "geojson",
+      "data": "https://example.com/something.json"
+    },
+    "maplibre": {
+      "url": "https://demotiles.maplibre.org/tiles/tiles.json",
+      "type": "vector"
+    }
+  },
+  "version": 8
+}

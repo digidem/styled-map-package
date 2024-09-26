@@ -1,0 +1,72 @@
+{
+  "name": "MapLibre",
+  "zoom": 0,
+  "pitch": 0,
+  "center": [
+    0,
+    0
+  ],
+  "glyphs": "smp://maps.v1/fonts/{fontstack}/{range}.pbf.gz",
+  "layers": [
+    {
+      "id": "countries-label",
+      "type": "symbol",
+      "paint": {
+        "text-color": "rgba(8, 37, 77, 1)",
+        "text-halo-color": "rgba(255, 255, 255, 1)"
+      },
+      "filter": [
+        "all"
+      ],
+      "layout": {
+        "text-font": [
+          "Open Sans Semibold"
+        ],
+        "text-size": 12,
+        "text-field": [
+          "to-string",
+          [
+            "get",
+            "NAME"
+          ]
+        ],
+        "visibility": "visible",
+        "text-max-width": 10
+      },
+      "source": "maplibre",
+      "maxzoom": 24,
+      "minzoom": 2,
+      "source-layer": "centroids"
+    }
+  ],
+  "bearing": 0,
+  "sources": {
+    "maplibre": {
+      "type": "vector",
+      "minzoom": 0,
+      "maxzoom": 0,
+      "bounds": [
+        -180,
+        -85.051129,
+        180,
+        85.051129
+      ],
+      "tiles": [
+        "smp://maps.v1/s/0/{z}/{x}/{y}.mvt.gz"
+      ]
+    }
+  },
+  "version": 8,
+  "metadata": {
+    "smp:bounds": [
+      -180,
+      -85.051129,
+      180,
+      85.051129
+    ],
+    "smp:maxzoom": 0,
+    "smp:sourceFolders": {
+      "maplibre": "0"
+    }
+  }
+}
