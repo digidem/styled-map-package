@@ -19,7 +19,8 @@
   "scripts": {
     "test": "npm run lint && node --test",
     "prepare": "husky",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "build:types": "tsc -p tsconfig.publish.json"
   },
   "keywords": [],
   "author": "",
