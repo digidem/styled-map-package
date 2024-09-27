@@ -23,7 +23,7 @@
     "map-viewer"
   ],
   "scripts": {
-    "test": "npm run lint && node --test",
+    "test": "npm run lint && npm run types && node --test",
     "prepare": "husky",
     "lint": "eslint .",
     "types": "tsc",
