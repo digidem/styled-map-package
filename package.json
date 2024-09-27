@@ -26,6 +26,7 @@
     "test": "npm run lint && node --test",
     "prepare": "husky",
     "lint": "eslint .",
+    "types": "tsc",
     "build:types": "tsc -p tsconfig.publish.json"
   },
   "keywords": [],
