@@ -1,15 +1,20 @@
 {
   "compilerOptions": {
-    "target": "ES2021",
-    "lib": ["ES2022", "dom"],
-    "strict": true,
-    "allowSyntheticDefaultImports": true,
-    "resolveJsonModule": true,
-    "module": "ES2022",
-    "moduleResolution": "node",
+    "target": "es2022",
+    "lib": ["es2022"],
+
     "allowJs": true,
     "checkJs": true,
+    "module": "NodeNext",
+    "moduleDetection": "force",
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
     "noEmit": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+
     "skipLibCheck": true,
     "typeRoots": ["types", "node_modules/@types"]
   },
