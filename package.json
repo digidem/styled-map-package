@@ -16,6 +16,12 @@
     "smp": "./bin/smp.js"
   },
   "type": "module",
+  "files": [
+    "map-viewer",
+    "bin",
+    "lib",
+    "dist"
+  ],
   "scripts": {
     "test": "npm run lint && node --test",
     "prepare": "husky",
