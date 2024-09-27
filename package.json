@@ -3,14 +3,36 @@
   "version": "1.0.1",
   "description": "",
   "exports": {
-    ".": "./lib/index.js",
-    "./reader": "./lib/reader.js",
-    "./writer": "./lib/writer.js",
-    "./server": "./lib/server.js",
-    "./style-downloader": "./lib/style-downloader.js",
-    "./tile-downloader": "./lib/tile-downloader.js",
-    "./download": "./lib/download.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./lib/index.js"
+    },
+    "./reader.js": {
+      "types": "./dist/reader.d.ts",
+      "import": "./lib/reader.js"
+    },
+    "./writer.js": {
+      "types": "./dist/writer.d.ts",
+      "import": "./lib/writer.js"
+    },
+    "./server.js": {
+      "types": "./dist/server.d.ts",
+      "import": "./lib/server.js"
+    },
+    "./style-downloader.js": {
+      "types": "./dist/style-downloader.d.ts",
+      "import": "./lib/style-downloader.js"
+    },
+    "./tile-downloader.js": {
+      "types": "./dist/tile-downloader.d.ts",
+      "import": "./lib/tile-downloader.js"
+    },
+    "./download.js": {
+      "types": "./dist/download.d.ts",
+      "import": "./lib/download.js"
+    }
   },
+  "types": "./dist/index.d.ts",
   "bin": {
     "styled-map-package": "./bin/smp.js",
     "smp": "./bin/smp.js"
