@@ -17,10 +17,10 @@
   },
   "type": "module",
   "files": [
-    "map-viewer",
     "bin",
+    "dist",
     "lib",
-    "dist"
+    "map-viewer"
   ],
   "scripts": {
     "test": "npm run lint && node --test",
