@@ -32,6 +32,7 @@
       "import": "./lib/download.js"
     }
   },
+  "main": "./lib/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
     "styled-map-package": "./bin/smp.js",
