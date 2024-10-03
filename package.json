@@ -3,23 +3,55 @@
   "version": "1.0.1",
   "description": "",
   "exports": {
-    ".": "./lib/index.js",
-    "./reader": "./lib/reader.js",
-    "./writer": "./lib/writer.js",
-    "./server": "./lib/server.js",
-    "./style-downloader": "./lib/style-downloader.js",
-    "./tile-downloader": "./lib/tile-downloader.js",
-    "./download": "./lib/download.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./lib/index.js"
+    },
+    "./reader": {
+      "types": "./dist/reader.d.ts",
+      "import": "./lib/reader.js"
+    },
+    "./writer": {
+      "types": "./dist/writer.d.ts",
+      "import": "./lib/writer.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./lib/server.js"
+    },
+    "./style-downloader": {
+      "types": "./dist/style-downloader.d.ts",
+      "import": "./lib/style-downloader.js"
+    },
+    "./tile-downloader": {
+      "types": "./dist/tile-downloader.d.ts",
+      "import": "./lib/tile-downloader.js"
+    },
+    "./download": {
+      "types": "./dist/download.d.ts",
+      "import": "./lib/download.js"
+    }
   },
+  "main": "./lib/index.js",
+  "types": "./dist/index.d.ts",
   "bin": {
     "styled-map-package": "./bin/smp.js",
     "smp": "./bin/smp.js"
   },
   "type": "module",
+  "files": [
+    "bin",
+    "dist",
+    "lib",
+    "map-viewer"
+  ],
   "scripts": {
-    "test": "npm run lint && node --test",
+    "test": "npm run lint && npm run types && node --test",
     "prepare": "husky",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "types": "tsc",
+    "build:types": "rimraf \"dist/\" && tsc -p tsconfig.publish.json",
+    "prepack": "npm run build:types"
   },
   "keywords": [],
   "author": "",
@@ -80,6 +112,7 @@
     "png-stream": "^1.0.5",
     "prettier": "^3.3.3",
     "random-bytes-readable-stream": "^3.0.0",
+    "rimraf": "^4.4.1",
     "type-fest": "^4.26.0",
     "typescript": "5.5.4"
   },

@@ -26,3 +26,6 @@ Thumbs.db
 
 # SMP artifacts from testing
 /*.smp
+
+# Published directory for type definitions
+dist/
