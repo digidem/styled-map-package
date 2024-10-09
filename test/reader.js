@@ -32,7 +32,7 @@ test('Reader, invalid smp file', async () => {
   // check zip file is valid
   const entries = await zip.readEntries()
   assert(entries.find((entry) => entry.filename === 'file2.txt'))
-  const expectedError = { message: /File not found/ }
+  const expectedError = { code: 'ENOENT' }
   const reader = new Reader(zip)
   await assert.rejects(reader.getStyle(), expectedError)
   await assert.rejects(reader.getResource('/style.json'), expectedError)
