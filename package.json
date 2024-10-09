@@ -70,6 +70,7 @@
     "commander": "^12.1.0",
     "fastify": "^4.28.1",
     "filter-obj": "^6.1.0",
+    "http-errors": "^2.0.0",
     "into-stream": "^8.0.1",
     "is-stream": "^4.0.1",
     "ky": "^1.7.1",
@@ -96,6 +97,7 @@
     "@types/eslint": "^9.6.1",
     "@types/eslint__js": "^8.42.3",
     "@types/geojson": "^7946.0.14",
+    "@types/http-errors": "^2.0.4",
     "@types/mapbox__sphericalmercator": "^1.2.3",
     "@types/node": "^20.16.3",
     "@types/readable-stream": "^4.0.15",
@@ -114,6 +116,7 @@
     "prettier": "^3.3.3",
     "random-bytes-readable-stream": "^3.0.0",
     "rimraf": "^4.4.1",
+    "tempy": "^3.1.0",
     "type-fest": "^4.26.0",
     "typescript": "5.5.4"
   },
