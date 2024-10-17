@@ -189,7 +189,7 @@ test.only('file removed (rm) after server starts', async (t) => {
   await fsPromises.rm(filepath)
   console.log('removed file')
   // Need to wait for fs.watch to detect the file deletion
-  await setTimeout(6000)
+  await setTimeout(100)
   console.log('waited')
 
   await t.test('404 error after file deletion', async () => {
@@ -218,7 +218,7 @@ test.only('file removed (unlink) after server starts', async (t) => {
 
   await fsPromises.unlink(filepath)
   // Need to wait for fs.watch to detect the file deletion
-  await setTimeout(6000)
+  await setTimeout(100)
 
   await t.test('404 error after file deletion', async () => {
     const response = await fastify.inject({ url: '/style.json' })
