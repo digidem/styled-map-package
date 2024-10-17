@@ -1,7 +1,9 @@
 import archiver from 'archiver'
+import { temporaryWrite } from 'tempy'
 import { fromBuffer } from 'yauzl-promise'
 
 import assert from 'node:assert/strict'
+import { randomBytes } from 'node:crypto'
 import { buffer } from 'node:stream/consumers'
 import { test } from 'node:test'
 
@@ -17,7 +19,7 @@ test('Reader, invalid filepath', async () => {
 
 test('Reader, invalid non-zip file', async () => {
   const expectedError = { message: /End of Central Directory Record/ }
-  const reader = new Reader('/dev/null')
+  const reader = new Reader(await temporaryWrite(randomBytes(1024)))
   await assert.rejects(reader.getStyle(), expectedError)
   await assert.rejects(reader.close(), expectedError)
   await assert.rejects(reader.getResource('/style.json'), expectedError)
