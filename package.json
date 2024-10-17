@@ -11,6 +11,10 @@
       "types": "./dist/reader.d.ts",
       "import": "./lib/reader.js"
     },
+    "./reader-watch": {
+      "types": "./dist/reader-watch.d.ts",
+      "import": "./lib/reader-watch.js"
+    },
     "./writer": {
       "types": "./dist/writer.d.ts",
       "import": "./lib/writer.js"
