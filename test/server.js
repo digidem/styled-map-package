@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import { randomBytes } from 'node:crypto'
 import fsPromises from 'node:fs/promises'
 import { test } from 'node:test'
+import { setImmediate } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 
 import createServer from '../lib/server.js'
@@ -185,7 +186,7 @@ test('file removed (rm) after server starts', async (t) => {
 
   await fsPromises.rm(filepath)
   // Need to wait for next event loop cycle for fs.watch to detect the file deletion
-  await new Promise((resolve) => setImmediate(resolve, 0))
+  await setImmediate()
 
   await t.test('404 error after file deletion', async () => {
     const response = await fastify.inject({ url: '/style.json' })
@@ -214,7 +215,7 @@ test('file removed (unlink) after server starts', async (t) => {
 
   await fsPromises.unlink(filepath)
   // Need to wait for next event loop cycle for fs.watch to detect the file deletion
-  await new Promise((resolve) => setImmediate(resolve, 0))
+  await setImmediate()
 
   await t.test('404 error after file deletion', async () => {
     const response = await fastify.inject({ url: '/style.json' })
@@ -246,6 +247,8 @@ test('file changed after server starts', async (t) => {
   })
 
   await fsPromises.copyFile(smpFixture2Filepath, filepath)
+  // Need to wait for next event loop cycle for fs.watch to detect the file deletion
+  await setImmediate()
 
   await t.test('2nd fixture served after file replacement', async () => {
     const response = await fastify.inject({ url: '/style.json' })
@@ -277,6 +280,8 @@ test('file changed twice after server starts', async (t) => {
   })
 
   await fsPromises.copyFile(smpFixture2Filepath, filepath)
+  // Need to wait for next event loop cycle for fs.watch to detect the file deletion
+  await setImmediate()
 
   await t.test('2nd fixture served after file replacement', async () => {
     const response = await fastify.inject({ url: '/style.json' })
@@ -285,6 +290,8 @@ test('file changed twice after server starts', async (t) => {
   })
 
   await fsPromises.copyFile(smpFixture1Filepath, filepath)
+  // Need to wait for next event loop cycle for fs.watch to detect the file deletion
+  await setImmediate()
 
   await t.test('1st fixture is served again', async () => {
     const response = await fastify.inject({ url: '/style.json' })
