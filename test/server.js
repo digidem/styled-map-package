@@ -184,6 +184,8 @@ test('file removed (rm) after server starts', async (t) => {
   })
 
   await fsPromises.rm(filepath)
+  // Need to wait for next event loop cycle for fs.watch to detect the file deletion
+  await new Promise((resolve) => setImmediate(resolve, 0))
 
   await t.test('404 error after file deletion', async () => {
     const response = await fastify.inject({ url: '/style.json' })
@@ -211,11 +213,8 @@ test('file removed (unlink) after server starts', async (t) => {
   })
 
   await fsPromises.unlink(filepath)
-  // Need to wait for the I/O polling phase of the event loop for the unlink to
-  // be detected by the server (the fs.watch event for fs.unlink is not emitted
-  // until the I/O polling phase, and setTimeout(fn, 0) wait until the end of
-  // the event loop after this phase)
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  // Need to wait for next event loop cycle for fs.watch to detect the file deletion
+  await new Promise((resolve) => setImmediate(resolve, 0))
 
   await t.test('404 error after file deletion', async () => {
     const response = await fastify.inject({ url: '/style.json' })
