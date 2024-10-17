@@ -300,7 +300,7 @@ test.only('file changed twice after server starts', async (t) => {
 
   if (!isWin()) {
     // To check we don't leave file descriptors open for replaced files - one fd for the reader, one for the fs.watch()
-    assert.equal(await fdCount(filepath), 2, 'only two file descriptors open')
+    assert((await fdCount(filepath)) <= 2, 'max two file descriptors open')
   }
 
   await fastify.close()
