@@ -6,14 +6,16 @@ import assert from 'node:assert/strict'
 import { randomBytes } from 'node:crypto'
 import fsPromises from 'node:fs/promises'
 import { test } from 'node:test'
+import { fileURLToPath } from 'node:url'
 
 import createServer from '../lib/server.js'
 import { validateStyle } from '../lib/utils/style.js'
 import { replaceVariables } from '../lib/utils/templates.js'
 
 test('server basic', async (t) => {
-  const filepath = new URL('./fixtures/demotiles-z2.smp', import.meta.url)
-    .pathname
+  const filepath = fileURLToPath(
+    new URL('./fixtures/demotiles-z2.smp', import.meta.url),
+  )
   const fastify = createFastify()
   fastify.register(createServer, { filepath })
   await fastify.listen()
@@ -75,8 +77,9 @@ test('server basic', async (t) => {
 })
 
 test('server.close() closes reader', { skip: isWin() }, async () => {
-  const filepath = new URL('./fixtures/demotiles-z2.smp', import.meta.url)
-    .pathname
+  const filepath = fileURLToPath(
+    new URL('./fixtures/demotiles-z2.smp', import.meta.url),
+  )
   const fastify = createFastify()
   fastify.register(createServer, { filepath })
   await fastify.listen()
@@ -120,10 +123,9 @@ test('server invalid file', async (t) => {
 
 test('server file present after server starts', async (t) => {
   const filepath = temporaryFile()
-  const smpFixtureFilepath = new URL(
-    './fixtures/demotiles-z2.smp',
-    import.meta.url,
-  ).pathname
+  const smpFixtureFilepath = fileURLToPath(
+    new URL('./fixtures/demotiles-z2.smp', import.meta.url),
+  )
 
   const fastify = createFastify()
   fastify.register(createServer, { filepath })
@@ -147,10 +149,9 @@ test('server file present after server starts', async (t) => {
 
 test('invalid file replaced after server starts', async (t) => {
   const filepath = await temporaryWrite(randomBytes(1024))
-  const smpFixtureFilepath = new URL(
-    './fixtures/demotiles-z2.smp',
-    import.meta.url,
-  ).pathname
+  const smpFixtureFilepath = fileURLToPath(
+    new URL('./fixtures/demotiles-z2.smp', import.meta.url),
+  )
 
   const fastify = createFastify()
   fastify.register(createServer, { filepath })
