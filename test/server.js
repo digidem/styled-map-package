@@ -275,7 +275,7 @@ test('invalid file replaced after server starts with ReaderWatch', async (t) => 
 })
 
 test('file removed (rm) after server starts with ReaderWatch', async (t) => {
-  const filepath = await temporaryFile()
+  const filepath = temporaryFile()
   const smpFixtureFilepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
   )
@@ -307,7 +307,7 @@ test('file removed (rm) after server starts with ReaderWatch', async (t) => {
 })
 
 test('file removed (unlink) after server starts with ReaderWatch', async (t) => {
-  const filepath = await temporaryFile()
+  const filepath = temporaryFile()
   const smpFixtureFilepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
   )
@@ -339,7 +339,7 @@ test('file removed (unlink) after server starts with ReaderWatch', async (t) => 
 })
 
 test('file changed after server starts with ReaderWatch', async (t) => {
-  const filepath = await temporaryFile()
+  const filepath = temporaryFile()
   const smpFixture1Filepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
   )
@@ -375,7 +375,7 @@ test('file changed after server starts with ReaderWatch', async (t) => {
 })
 
 test('file changed twice after server starts with ReaderWatch', async (t) => {
-  const filepath = await temporaryFile()
+  const filepath = temporaryFile()
   const smpFixture1Filepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
   )
