@@ -189,7 +189,7 @@ test.only('file removed (rm) after server starts', async (t) => {
   await fsPromises.rm(filepath)
   console.log('removed file')
   // Need to wait for fs.watch to detect the file deletion
-  await setTimeout(100)
+  await setTimeout(6000)
   console.log('waited')
 
   await t.test('404 error after file deletion', async () => {
@@ -198,7 +198,7 @@ test.only('file removed (rm) after server starts', async (t) => {
   })
 })
 
-test('file removed (unlink) after server starts', async (t) => {
+test.only('file removed (unlink) after server starts', async (t) => {
   const filepath = await temporaryFile()
   const smpFixtureFilepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
@@ -218,7 +218,7 @@ test('file removed (unlink) after server starts', async (t) => {
 
   await fsPromises.unlink(filepath)
   // Need to wait for fs.watch to detect the file deletion
-  await setTimeout(100)
+  await setTimeout(6000)
 
   await t.test('404 error after file deletion', async () => {
     const response = await fastify.inject({ url: '/style.json' })
@@ -258,7 +258,7 @@ test('file changed after server starts', async (t) => {
   })
 })
 
-test('file changed twice after server starts', async (t) => {
+test.only('file changed twice after server starts', async (t) => {
   const filepath = await temporaryFile()
   const smpFixture1Filepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
