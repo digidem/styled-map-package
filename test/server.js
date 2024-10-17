@@ -173,6 +173,65 @@ test('invalid file replaced after server starts', async (t) => {
   })
 })
 
+test('file removed after server starts', async (t) => {
+  const filepath = await temporaryFile()
+  const smpFixtureFilepath = new URL(
+    './fixtures/demotiles-z2.smp',
+    import.meta.url,
+  ).pathname
+  await fsPromises.copyFile(smpFixtureFilepath, filepath)
+
+  const fastify = createFastify()
+  fastify.register(createServer, { filepath })
+  await fastify.listen()
+  t.after(() => fastify.close())
+
+  await t.test('works initially', async () => {
+    const response = await fastify.inject({ url: '/style.json' })
+    assert.equal(response.statusCode, 200)
+    assert(validateStyle(response.json()))
+  })
+
+  await fsPromises.unlink(filepath)
+
+  await t.test('404 error after file deletion', async () => {
+    const response = await fastify.inject({ url: '/style.json' })
+    assert.equal(response.statusCode, 404)
+  })
+})
+
+test('file changed after server starts', async (t) => {
+  const filepath = await temporaryFile()
+  const smpFixture1Filepath = new URL(
+    './fixtures/demotiles-z2.smp',
+    import.meta.url,
+  ).pathname
+  const smpFixture2Filepath = new URL(
+    './fixtures/osm-bright-z6.smp',
+    import.meta.url,
+  ).pathname
+  await fsPromises.copyFile(smpFixture1Filepath, filepath)
+
+  const fastify = createFastify()
+  fastify.register(createServer, { filepath })
+  await fastify.listen()
+  t.after(() => fastify.close())
+
+  await t.test('1st fixture is served initially', async () => {
+    const response = await fastify.inject({ url: '/style.json' })
+    assert.equal(response.statusCode, 200)
+    assert.equal(response.json().name, 'MapLibre')
+  })
+
+  await fsPromises.copyFile(smpFixture2Filepath, filepath)
+
+  await t.test('2nd fixture served after file replacement', async () => {
+    const response = await fastify.inject({ url: '/style.json' })
+    assert.equal(response.statusCode, 200)
+    assert.equal(response.json().name, 'OSM Bright')
+  })
+})
+
 /** @returns {boolean} */
 function isWin() {
   return process.platform === 'win32'
