@@ -263,12 +263,11 @@ test('invalid file replaced after server starts with ReaderWatch', async (t) => 
     assert.match(response.json().error, /Internal Server Error/)
   })
 
-  // Needed for tests to pass on Windows
+  await fsPromises.copyFile(smpFixtureFilepath, filepath)
+  // Need to wait for I/O operations in the event loop for fs.watch to detect the file deletion
   await setImmediatePromise()
 
   await t.test('file is added after server starts', async () => {
-    await fsPromises.copyFile(smpFixtureFilepath, filepath)
-
     const response = await fastify.inject({ url: '/style.json' })
     assert.equal(response.statusCode, 200)
     assert(validateStyle(response.json()))
