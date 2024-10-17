@@ -9,11 +9,14 @@ import { test } from 'node:test'
 import { setImmediate as setImmediatePromise } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 
+import ReaderWatch from '../lib/reader-watch.js'
+import Reader from '../lib/reader.js'
 import createServer from '../lib/server.js'
+import { noop } from '../lib/utils/misc.js'
 import { validateStyle } from '../lib/utils/style.js'
 import { replaceVariables } from '../lib/utils/templates.js'
 
-test('server basic', async (t) => {
+test('server basic (filepath)', async (t) => {
   const filepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
   )
@@ -77,52 +80,152 @@ test('server basic', async (t) => {
   }
 })
 
-test('server.close() closes reader', { skip: isWin() }, async () => {
+test('server basic (reader)', async (t) => {
   const filepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
   )
+  const reader = new Reader(filepath)
   const fastify = createFastify()
-  fastify.register(createServer, { filepath })
+  fastify.register(createServer, { reader })
   await fastify.listen()
-  // The server opens two file descriptors: one for the SMP Reader and one for the fs.watch()
-  assert((await fdCount(filepath)) > 0)
-  await fastify.close()
-  assert.equal(await fdCount(filepath), 0)
+  t.after(async () => {
+    await fastify.close()
+    await reader.close()
+  })
+  const response = await fastify.inject({ url: '/style.json' })
+  assert.equal(response.statusCode, 200)
+  assert.equal(
+    response.rawPayload.length,
+    Number(response.headers['content-length']),
+    'Content-Length header is correct',
+  )
+  const style = response.json()
+  assert(validateStyle(style), 'style is valid')
+
+  {
+    assert(typeof style.glyphs === 'string')
+    const glyphUrl = replaceVariables(style.glyphs, {
+      fontstack: 'Open Sans Semibold',
+      range: '0-255',
+    })
+    const response = await fastify.inject({ url: glyphUrl })
+    assert.equal(response.statusCode, 200)
+    assert.equal(response.headers['content-type'], 'application/x-protobuf')
+    assert.equal(response.headers['content-encoding'], 'gzip')
+    assert(response.headers['content-length'])
+
+    assert.equal(
+      response.rawPayload.length,
+      Number(response.headers['content-length']),
+      'Content-Length header is correct',
+    )
+  }
+
+  {
+    const tileSource = Object.values(style.sources).find(
+      (source) => source.type === 'vector',
+    )
+    assert(tileSource?.tiles)
+    const tileUrl = replaceVariables(tileSource.tiles[0], {
+      z: 0,
+      x: 0,
+      y: 0,
+    })
+    const response = await fastify.inject({ url: tileUrl })
+    assert.equal(response.statusCode, 200)
+    assert.equal(
+      response.headers['content-type'],
+      'application/vnd.mapbox-vector-tile',
+    )
+    assert.equal(response.headers['content-encoding'], 'gzip')
+    assert(response.headers['content-length'])
+
+    assert.equal(
+      response.rawPayload.length,
+      Number(response.headers['content-length']),
+      'Content-Length header is correct',
+    )
+  }
 })
 
-test('server invalid filepath', async () => {
-  const filepath = 'invalid_file_path'
+test(
+  'server.close() closes reader if passed filepath',
+  { skip: isWin() },
+  async () => {
+    const filepath = fileURLToPath(
+      new URL('./fixtures/demotiles-z2.smp', import.meta.url),
+    )
+    const fastify = createFastify()
+    fastify.register(createServer, { filepath })
+    await fastify.listen()
+    // The server opens two file descriptors: one for the SMP Reader and one for the fs.watch()
+    assert((await fdCount(filepath)) > 0)
+    await fastify.close()
+    assert.equal(await fdCount(filepath), 0)
+  },
+)
+
+test("server.close() doesn't close reader passed as argument", async () => {
+  const filepath = fileURLToPath(
+    new URL('./fixtures/demotiles-z2.smp', import.meta.url),
+  )
+  const reader = new Reader(filepath)
   const fastify = createFastify()
-  fastify.register(createServer, { filepath })
+  fastify.register(createServer, { reader })
   await fastify.listen()
-  const response = await fastify.inject({ url: '/style.json' })
-  assert.equal(response.statusCode, 404)
   await fastify.close()
+  assert(await reader.getStyle(), 'reader is still open')
+})
+
+test('server invalid filepath with ReaderWatch', async () => {
+  const filepath = 'invalid_file_path'
+  const reader = new ReaderWatch(filepath)
+  const fastify = createFastify()
+  fastify.register(createServer, { reader })
+  await fastify.listen()
+  {
+    const response = await fastify.inject({ url: '/style.json' })
+    assert.equal(response.statusCode, 404)
+  }
+  {
+    const response = await fastify.inject({ url: '/something/else' })
+    assert.equal(response.statusCode, 404)
+  }
+  await fastify.close()
+  await reader.close().catch(noop)
   if (!isWin()) {
     assert.equal(await fdCount(filepath), 0)
   }
 })
 
-test('server invalid file', async (t) => {
+test('server invalid file with ReaderWatch', async (t) => {
   const filepath = await temporaryWrite(randomBytes(1024))
+  const reader = new ReaderWatch(filepath)
   const fastify = createFastify()
-  fastify.register(createServer, { filepath })
+  fastify.register(createServer, { reader })
   await fastify.listen()
-  t.after(() => fastify.close())
+  t.after(async () => {
+    await fastify.close()
+    await reader.close().catch(noop)
+  })
   const response = await fastify.inject({ url: '/style.json' })
   assert.equal(response.statusCode, 500)
 })
 
-test('server file present after server starts', async (t) => {
+test('server file present after server starts with ReaderWatch', async (t) => {
   const filepath = temporaryFile()
   const smpFixtureFilepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
   )
+  const reader = new ReaderWatch(filepath)
 
   const fastify = createFastify()
-  fastify.register(createServer, { filepath })
+  fastify.register(createServer, { reader })
   await fastify.listen()
-  t.after(() => fastify.close())
+  t.after(async () => {
+    await fastify.close()
+    await reader.close().catch(noop)
+  })
 
   await t.test('file is not present initially', async () => {
     const response = await fastify.inject({ url: '/style.json' })
@@ -139,16 +242,20 @@ test('server file present after server starts', async (t) => {
   })
 })
 
-test('invalid file replaced after server starts', async (t) => {
+test('invalid file replaced after server starts with ReaderWatch', async (t) => {
   const filepath = await temporaryWrite(randomBytes(1024))
   const smpFixtureFilepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
   )
+  const reader = new ReaderWatch(filepath)
 
   const fastify = createFastify()
-  fastify.register(createServer, { filepath })
+  fastify.register(createServer, { reader })
   await fastify.listen()
-  t.after(() => fastify.close())
+  t.after(async () => {
+    await fastify.close()
+    await reader.close().catch(noop)
+  })
 
   await t.test('file is not present initially', async () => {
     const response = await fastify.inject({ url: '/style.json' })
@@ -168,17 +275,21 @@ test('invalid file replaced after server starts', async (t) => {
   })
 })
 
-test('file removed (rm) after server starts', async (t) => {
+test('file removed (rm) after server starts with ReaderWatch', async (t) => {
   const filepath = await temporaryFile()
   const smpFixtureFilepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
   )
   await fsPromises.copyFile(smpFixtureFilepath, filepath)
+  const reader = new ReaderWatch(filepath)
 
   const fastify = createFastify()
-  fastify.register(createServer, { filepath })
+  fastify.register(createServer, { reader })
   await fastify.listen()
-  t.after(() => fastify.close())
+  t.after(async () => {
+    await fastify.close()
+    await reader.close().catch(noop)
+  })
 
   await t.test('works initially', async () => {
     const response = await fastify.inject({ url: '/style.json' })
@@ -187,10 +298,8 @@ test('file removed (rm) after server starts', async (t) => {
   })
 
   await fsPromises.rm(filepath)
-  console.log('removed file')
   // Need to wait for I/O operations in the event loop for fs.watch to detect the file deletion
   await setImmediatePromise()
-  console.log('waited')
 
   await t.test('404 error after file deletion', async () => {
     const response = await fastify.inject({ url: '/style.json' })
@@ -198,17 +307,21 @@ test('file removed (rm) after server starts', async (t) => {
   })
 })
 
-test('file removed (unlink) after server starts', async (t) => {
+test('file removed (unlink) after server starts with ReaderWatch', async (t) => {
   const filepath = await temporaryFile()
   const smpFixtureFilepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
   )
   await fsPromises.copyFile(smpFixtureFilepath, filepath)
+  const reader = new ReaderWatch(filepath)
 
   const fastify = createFastify()
-  fastify.register(createServer, { filepath })
+  fastify.register(createServer, { reader })
   await fastify.listen()
-  t.after(() => fastify.close())
+  t.after(async () => {
+    await fastify.close()
+    await reader.close().catch(noop)
+  })
 
   await t.test('works initially', async () => {
     const response = await fastify.inject({ url: '/style.json' })
@@ -226,7 +339,7 @@ test('file removed (unlink) after server starts', async (t) => {
   })
 })
 
-test('file changed after server starts', async (t) => {
+test('file changed after server starts with ReaderWatch', async (t) => {
   const filepath = await temporaryFile()
   const smpFixture1Filepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
@@ -235,11 +348,15 @@ test('file changed after server starts', async (t) => {
     new URL('./fixtures/osm-bright-z6.smp', import.meta.url),
   )
   await fsPromises.copyFile(smpFixture1Filepath, filepath)
+  const reader = new ReaderWatch(filepath)
 
   const fastify = createFastify()
-  fastify.register(createServer, { filepath })
+  fastify.register(createServer, { reader })
   await fastify.listen()
-  t.after(() => fastify.close())
+  t.after(async () => {
+    await fastify.close()
+    await reader.close().catch(noop)
+  })
 
   await t.test('1st fixture is served initially', async () => {
     const response = await fastify.inject({ url: '/style.json' })
@@ -258,7 +375,7 @@ test('file changed after server starts', async (t) => {
   })
 })
 
-test('file changed twice after server starts', async (t) => {
+test('file changed twice after server starts with ReaderWatch', async (t) => {
   const filepath = await temporaryFile()
   const smpFixture1Filepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
@@ -267,9 +384,10 @@ test('file changed twice after server starts', async (t) => {
     new URL('./fixtures/osm-bright-z6.smp', import.meta.url),
   )
   await fsPromises.copyFile(smpFixture1Filepath, filepath)
+  const reader = new ReaderWatch(filepath)
 
   const fastify = createFastify()
-  fastify.register(createServer, { filepath })
+  fastify.register(createServer, { reader })
   await fastify.listen()
 
   await t.test('1st fixture is served initially', async () => {
@@ -304,6 +422,7 @@ test('file changed twice after server starts', async (t) => {
   }
 
   await fastify.close()
+  await reader.close().catch(noop)
   if (!isWin()) {
     assert.equal(await fdCount(filepath), 0, 'no file descriptors left open')
   }
