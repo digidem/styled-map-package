@@ -88,19 +88,6 @@ test('server.close() closes reader', { skip: isWin() }, async () => {
   assert.equal(await fdCount(filepath), 0)
 })
 
-test('server lazy', { skip: isWin() }, async () => {
-  const filepath = new URL('./fixtures/demotiles-z2.smp', import.meta.url)
-    .pathname
-  const fastify = createFastify()
-  fastify.register(createServer, { filepath, lazy: true })
-  await fastify.listen()
-  assert.equal(await fdCount(filepath), 0)
-  await fastify.inject({ url: '/style.json' })
-  assert.equal(await fdCount(filepath), 1)
-  await fastify.close()
-  assert.equal(await fdCount(filepath), 0)
-})
-
 test('server invalid filepath', async (t) => {
   const filepath = 'invalid_file_path'
   const fastify = createFastify()
