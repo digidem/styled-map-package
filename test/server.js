@@ -83,32 +83,23 @@ test('server.close() closes reader', { skip: isWin() }, async () => {
   const fastify = createFastify()
   fastify.register(createServer, { filepath })
   await fastify.listen()
-  assert.equal(await fdCount(filepath), 1)
+  // The server opens two file descriptors: one for the SMP Reader and one for the fs.watch()
+  assert((await fdCount(filepath)) > 0)
   await fastify.close()
   assert.equal(await fdCount(filepath), 0)
 })
 
-test('server lazy', { skip: isWin() }, async () => {
-  const filepath = new URL('./fixtures/demotiles-z2.smp', import.meta.url)
-    .pathname
-  const fastify = createFastify()
-  fastify.register(createServer, { filepath, lazy: true })
-  await fastify.listen()
-  assert.equal(await fdCount(filepath), 0)
-  await fastify.inject({ url: '/style.json' })
-  assert.equal(await fdCount(filepath), 1)
-  await fastify.close()
-  assert.equal(await fdCount(filepath), 0)
-})
-
-test('server invalid filepath', async (t) => {
+test('server invalid filepath', async () => {
   const filepath = 'invalid_file_path'
   const fastify = createFastify()
   fastify.register(createServer, { filepath })
   await fastify.listen()
-  t.after(() => fastify.close())
   const response = await fastify.inject({ url: '/style.json' })
   assert.equal(response.statusCode, 404)
+  await fastify.close()
+  if (!isWin()) {
+    assert.equal(await fdCount(filepath), 0)
+  }
 })
 
 test('server invalid file', async (t) => {
@@ -173,7 +164,34 @@ test('invalid file replaced after server starts', async (t) => {
   })
 })
 
-test('file removed after server starts', async (t) => {
+test('file removed (rm) after server starts', async (t) => {
+  const filepath = await temporaryFile()
+  const smpFixtureFilepath = new URL(
+    './fixtures/demotiles-z2.smp',
+    import.meta.url,
+  ).pathname
+  await fsPromises.copyFile(smpFixtureFilepath, filepath)
+
+  const fastify = createFastify()
+  fastify.register(createServer, { filepath })
+  await fastify.listen()
+  t.after(() => fastify.close())
+
+  await t.test('works initially', async () => {
+    const response = await fastify.inject({ url: '/style.json' })
+    assert.equal(response.statusCode, 200)
+    assert(validateStyle(response.json()))
+  })
+
+  await fsPromises.rm(filepath)
+
+  await t.test('404 error after file deletion', async () => {
+    const response = await fastify.inject({ url: '/style.json' })
+    assert.equal(response.statusCode, 404)
+  })
+})
+
+test('file removed (unlink) after server starts', async (t) => {
   const filepath = await temporaryFile()
   const smpFixtureFilepath = new URL(
     './fixtures/demotiles-z2.smp',
@@ -193,6 +211,11 @@ test('file removed after server starts', async (t) => {
   })
 
   await fsPromises.unlink(filepath)
+  // Need to wait for the I/O polling phase of the event loop for the unlink to
+  // be detected by the server (the fs.watch event for fs.unlink is not emitted
+  // until the I/O polling phase, and setTimeout(fn, 0) wait until the end of
+  // the event loop after this phase)
+  await new Promise((resolve) => setTimeout(resolve, 0))
 
   await t.test('404 error after file deletion', async () => {
     const response = await fastify.inject({ url: '/style.json' })
@@ -230,6 +253,55 @@ test('file changed after server starts', async (t) => {
     assert.equal(response.statusCode, 200)
     assert.equal(response.json().name, 'OSM Bright')
   })
+})
+
+test('file changed twice after server starts', async (t) => {
+  const filepath = await temporaryFile()
+  const smpFixture1Filepath = new URL(
+    './fixtures/demotiles-z2.smp',
+    import.meta.url,
+  ).pathname
+  const smpFixture2Filepath = new URL(
+    './fixtures/osm-bright-z6.smp',
+    import.meta.url,
+  ).pathname
+  await fsPromises.copyFile(smpFixture1Filepath, filepath)
+
+  const fastify = createFastify()
+  fastify.register(createServer, { filepath })
+  await fastify.listen()
+
+  await t.test('1st fixture is served initially', async () => {
+    const response = await fastify.inject({ url: '/style.json' })
+    assert.equal(response.statusCode, 200)
+    assert.equal(response.json().name, 'MapLibre')
+  })
+
+  await fsPromises.copyFile(smpFixture2Filepath, filepath)
+
+  await t.test('2nd fixture served after file replacement', async () => {
+    const response = await fastify.inject({ url: '/style.json' })
+    assert.equal(response.statusCode, 200)
+    assert.equal(response.json().name, 'OSM Bright')
+  })
+
+  await fsPromises.copyFile(smpFixture1Filepath, filepath)
+
+  await t.test('1st fixture is served again', async () => {
+    const response = await fastify.inject({ url: '/style.json' })
+    assert.equal(response.statusCode, 200)
+    assert.equal(response.json().name, 'MapLibre')
+  })
+
+  if (!isWin()) {
+    // To check we don't leave file descriptors open for replaced files - one fd for the reader, one for the fs.watch()
+    assert.equal(await fdCount(filepath), 2, 'only two file descriptors open')
+  }
+
+  await fastify.close()
+  if (!isWin()) {
+    assert.equal(await fdCount(filepath), 0, 'no file descriptors left open')
+  }
 })
 
 /** @returns {boolean} */
