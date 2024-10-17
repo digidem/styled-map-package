@@ -168,7 +168,7 @@ test('invalid file replaced after server starts', async (t) => {
   })
 })
 
-test('file removed (rm) after server starts', async (t) => {
+test.only('file removed (rm) after server starts', async (t) => {
   const filepath = await temporaryFile()
   const smpFixtureFilepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
@@ -187,8 +187,10 @@ test('file removed (rm) after server starts', async (t) => {
   })
 
   await fsPromises.rm(filepath)
+  console.log('removed file')
   // Need to wait for fs.watch to detect the file deletion
   await setTimeout(100)
+  console.log('waited')
 
   await t.test('404 error after file deletion', async () => {
     const response = await fastify.inject({ url: '/style.json' })

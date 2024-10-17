@@ -46,7 +46,7 @@
     "map-viewer"
   ],
   "scripts": {
-    "test": "node --test test/server.js",
+    "test": "npm run lint && npm run types && node --test",
     "prepare": "husky",
     "lint": "eslint .",
     "types": "tsc",
