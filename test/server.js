@@ -168,7 +168,7 @@ test('invalid file replaced after server starts', async (t) => {
   })
 })
 
-test.only('file removed (rm) after server starts', async (t) => {
+test('file removed (rm) after server starts', async (t) => {
   const filepath = await temporaryFile()
   const smpFixtureFilepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
@@ -198,7 +198,7 @@ test.only('file removed (rm) after server starts', async (t) => {
   })
 })
 
-test.only('file removed (unlink) after server starts', async (t) => {
+test('file removed (unlink) after server starts', async (t) => {
   const filepath = await temporaryFile()
   const smpFixtureFilepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
@@ -258,7 +258,7 @@ test('file changed after server starts', async (t) => {
   })
 })
 
-test.only('file changed twice after server starts', async (t) => {
+test('file changed twice after server starts', async (t) => {
   const filepath = await temporaryFile()
   const smpFixture1Filepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
