@@ -167,10 +167,9 @@ test('invalid file replaced after server starts', async (t) => {
 
 test('file removed (rm) after server starts', async (t) => {
   const filepath = await temporaryFile()
-  const smpFixtureFilepath = new URL(
-    './fixtures/demotiles-z2.smp',
-    import.meta.url,
-  ).pathname
+  const smpFixtureFilepath = fileURLToPath(
+    new URL('./fixtures/demotiles-z2.smp', import.meta.url),
+  )
   await fsPromises.copyFile(smpFixtureFilepath, filepath)
 
   const fastify = createFastify()
@@ -196,10 +195,9 @@ test('file removed (rm) after server starts', async (t) => {
 
 test('file removed (unlink) after server starts', async (t) => {
   const filepath = await temporaryFile()
-  const smpFixtureFilepath = new URL(
-    './fixtures/demotiles-z2.smp',
-    import.meta.url,
-  ).pathname
+  const smpFixtureFilepath = fileURLToPath(
+    new URL('./fixtures/demotiles-z2.smp', import.meta.url),
+  )
   await fsPromises.copyFile(smpFixtureFilepath, filepath)
 
   const fastify = createFastify()
@@ -225,14 +223,12 @@ test('file removed (unlink) after server starts', async (t) => {
 
 test('file changed after server starts', async (t) => {
   const filepath = await temporaryFile()
-  const smpFixture1Filepath = new URL(
-    './fixtures/demotiles-z2.smp',
-    import.meta.url,
-  ).pathname
-  const smpFixture2Filepath = new URL(
-    './fixtures/osm-bright-z6.smp',
-    import.meta.url,
-  ).pathname
+  const smpFixture1Filepath = fileURLToPath(
+    new URL('./fixtures/demotiles-z2.smp', import.meta.url),
+  )
+  const smpFixture2Filepath = fileURLToPath(
+    new URL('./fixtures/osm-bright-z6.smp', import.meta.url),
+  )
   await fsPromises.copyFile(smpFixture1Filepath, filepath)
 
   const fastify = createFastify()
@@ -259,14 +255,12 @@ test('file changed after server starts', async (t) => {
 
 test('file changed twice after server starts', async (t) => {
   const filepath = await temporaryFile()
-  const smpFixture1Filepath = new URL(
-    './fixtures/demotiles-z2.smp',
-    import.meta.url,
-  ).pathname
-  const smpFixture2Filepath = new URL(
-    './fixtures/osm-bright-z6.smp',
-    import.meta.url,
-  ).pathname
+  const smpFixture1Filepath = fileURLToPath(
+    new URL('./fixtures/demotiles-z2.smp', import.meta.url),
+  )
+  const smpFixture2Filepath = fileURLToPath(
+    new URL('./fixtures/osm-bright-z6.smp', import.meta.url),
+  )
   await fsPromises.copyFile(smpFixture1Filepath, filepath)
 
   const fastify = createFastify()
