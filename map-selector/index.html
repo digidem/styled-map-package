@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SMP Downloader</title>
+<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.js"></script>
+<style>
+body { margin: 0; padding: 0; }
+#map { position: absolute; top: 0; bottom: 0; width: 100%; }
+</style>
+</head>
+<body>
+<style>
+    .calculation-box {
+        height: auto;
+        min-height: 280px;
+        width: 240px;
+        position: absolute;
+        bottom: 40px;
+        left: 20px;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 20px;
+        text-align: center;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        backdrop-filter: blur(5px);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    p {
+        font-family: 'Open Sans', sans-serif;
+        margin: 0 0 15px 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #2c3e50;
+    }
+
+    .button {
+        margin: 8px;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        background-color: #4CAF50;
+        color: white;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .button:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+
+    .button:active:not(:disabled) {
+        transform: translateY(0);
+    }
+
+    .button:disabled {
+        background-color: #e0e0e0;
+        cursor: not-allowed;
+        opacity: 0.7;
+        box-shadow: none;
+    }
+
+    .button.reset {
+        background-color: #e74c3c;
+    }
+
+    .button.reset:hover:not(:disabled) {
+        background-color: #c0392b;
+    }
+
+    .button.download {
+        background-color: #3498db;
+    }
+
+    .button.download:hover:not(:disabled) {
+        background-color: #2980b9;
+    }
+
+    .button.style {
+        background-color: #9b59b6;
+    }
+
+    .button.style:hover:not(:disabled) {
+        background-color: #8e44ad;
+    }
+
+    #calculated-area {
+        margin: 15px 0;
+        padding: 15px;
+        background: rgba(52, 152, 219, 0.1);
+        border-radius: 8px;
+        border: 1px solid rgba(52, 152, 219, 0.2);
+    }
+
+    #status {
+        margin-top: 15px;
+        font-size: 13px;
+        color: #7f8c8d;
+    }
+
+    .input-group {
+        margin: 10px 0;
+        text-align: left;
+    }
+
+    .input-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 12px;
+        color: #2c3e50;
+    }
+
+    .input-group input {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+
+    .style-buttons {
+        display: flex;
+        justify-content: space-between;
+        margin: 5px 0;
+    }
+</style>
+
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+<script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.js"></script>
+<link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.css" type="text/css">
+<div id="map"></div>
+<div class="calculation-box">
+    <p>Click the map to draw a polygon.</p>
+    <div class="input-group">
+        <label for="styleUrl">Style URL:</label>
+        <input type="text" id="styleUrl" placeholder="Enter style URL">
+        <div class="style-buttons">
+            <button id="loadStyleBtn" class="button style">Load Style</button>
+            <button id="resetStyleBtn" class="button reset">Reset Style</button>
+        </div>
+    </div>
+    <div class="input-group">
+        <label for="accessToken">Access Token:</label>
+        <input type="text" id="accessToken" placeholder="Enter Mapbox access token">
+    </div>
+    <div id="calculated-area"></div>
+    <button id="downloadBtn" class="button download" disabled>Download Map Package</button>
+    <button id="resetBtn" class="button reset">Reset Polygon</button>
+    <div id="status"></div>
+</div>
+
+<script>
+    const defaultToken = 'pk.eyJ1IjoibHVhbmRybyIsImEiOiJjanY2djRpdnkwOWdqM3lwZzVuaGIxa3VsIn0.jamcK2t2I1j3TXkUQFIsjQ'
+    const defaultStyleUrl = 'https://demotiles.maplibre.org/style.json';
+    const styleUrlInput = document.getElementById('styleUrl');
+    const accessTokenInput = document.getElementById('accessToken');
+    mapboxgl.accessToken = accessTokenInput.value || defaultToken;
+    accessTokenInput.value = accessTokenInput.value || defaultToken;
+
+    // Initialize map with default style
+    const map = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/mapbox/satellite-v9',
+        center: [-91.874, 42.76],
+        zoom: 12
+    });
+
+    const draw = new MapboxDraw({
+        displayControlsDefault: false,
+        controls: {
+            polygon: true,
+            trash: true
+        },
+        defaultMode: 'draw_polygon'
+    });
+    map.addControl(draw);
+
+    const downloadBtn = document.getElementById('downloadBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const loadStyleBtn = document.getElementById('loadStyleBtn');
+    const resetStyleBtn = document.getElementById('resetStyleBtn');
+    const statusDiv = document.getElementById('status');
+
+    map.on('draw.create', updateArea);
+    map.on('draw.delete', updateArea);
+    map.on('draw.update', updateArea);
+
+    function updateArea(e) {
+        const data = draw.getAll();
+        const answer = document.getElementById('calculated-area');
+        
+        if (data.features.length > 0) {
+            const coordinates = data.features[0].geometry.coordinates[0];
+            const area = turf.area(data);
+            const rounded_area = Math.round(area * 100) / 100;
+            
+            // Calculate bounding box
+            const bounds = coordinates.reduce((bbox, coord) => {
+                return [
+                    Math.min(bbox[0], coord[0]), // west
+                    Math.min(bbox[1], coord[1]), // south
+                    Math.max(bbox[2], coord[0]), // east
+                    Math.max(bbox[3], coord[1])  // north
+                ];
+            }, [Infinity, Infinity, -Infinity, -Infinity]);
+
+            answer.innerHTML = `<p><strong>${rounded_area}</strong></p><p>square meters</p>`;
+            downloadBtn.disabled = false;
+            
+            // Store bounds for download
+            downloadBtn.setAttribute('data-bounds', bounds.join(','));
+        } else {
+            answer.innerHTML = '';
+            downloadBtn.disabled = true;
+            if (e.type !== 'draw.delete')
+                alert('Click the map to draw a polygon.');
+        }
+    }
+
+    resetBtn.addEventListener('click', () => {
+        draw.deleteAll();
+        downloadBtn.disabled = true;
+        statusDiv.innerHTML = '';
+    });
+
+    downloadBtn.addEventListener('click', async () => {
+        const bounds = downloadBtn.getAttribute('data-bounds').split(',').map(Number);
+        const maxZoom = 14; // Configurable max zoom level
+        
+        statusDiv.innerHTML = 'Downloading map package...';
+        downloadBtn.disabled = true;
+
+        try {
+            const response = await fetch('/download', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    bbox: bounds,
+                    maxzoom: maxZoom,
+                    styleUrl: styleUrlInput.value || defaultStyleUrl,
+                    accessToken: accessTokenInput.value || undefined
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(error || 'Download failed');
+            }
+
+            // Create a download from the response stream
+            // Get the response as a blob
+            const blob = await response.blob();
+            
+            // Create a URL for the blob
+            const url = window.URL.createObjectURL(blob);
+            
+            // Create a temporary link element
+            const downloadLink = document.createElement('a');
+            downloadLink.style.display = 'none'; // Hide the link
+            downloadLink.href = url;
+            downloadLink.download = 'map-package.smp';
+            
+            // Add to document, click and cleanup
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+            
+            // Clean up the URL object
+            setTimeout(() => {
+                window.URL.revokeObjectURL(url);
+            }, 100);
+
+            statusDiv.innerHTML = 'Download complete!';
+        } catch (error) {
+            console.error('Download error:', error);
+            statusDiv.innerHTML = 'Download failed. Please try again.';
+        } finally {
+            downloadBtn.disabled = false;
+        }
+    });
+
+    // Load style button handler
+    loadStyleBtn.addEventListener('click', () => {
+        const newStyle = styleUrlInput.value || defaultStyleUrl;
+        statusDiv.innerHTML = 'Loading style...';
+        
+        try {
+            map.setStyle(newStyle);
+            map.once('style.load', () => {
+                statusDiv.innerHTML = 'Style loaded successfully!';
+                setTimeout(() => {
+                    statusDiv.innerHTML = '';
+                }, 2000);
+            });
+        } catch (error) {
+            statusDiv.innerHTML = 'Failed to load style. Please check the URL.';
+        }
+    });
+
+    // Reset style button handler
+    resetStyleBtn.addEventListener('click', () => {
+        styleUrlInput.value = defaultStyleUrl;
+        statusDiv.innerHTML = 'Resetting to default style...';
+        
+        try {
+            map.setStyle(defaultStyleUrl);
+            map.once('style.load', () => {
+                statusDiv.innerHTML = 'Reset to default style!';
+                setTimeout(() => {
+                    statusDiv.innerHTML = '';
+                }, 2000);
+            });
+        } catch (error) {
+            statusDiv.innerHTML = 'Failed to reset style.';
+        }
+    });
+</script>
+
+</body>
+</html>
