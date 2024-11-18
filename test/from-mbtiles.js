@@ -34,12 +34,15 @@ test('convert from MBTiles', async (t) => {
     const style = await smp.getStyle('')
     const sourceMetadata = Object.values(style.sources)[0]
     assert.equal(sourceMetadata.type, 'raster')
+    let tileCount = 0
     for (const { x, y, z, data } of mbtiles) {
+      tileCount++
       const path = replaceVariables(sourceMetadata.tiles[0], { x, y, z })
       const smpTile = await smp.getResource(path)
       assert.deepEqual(await buffer(smpTile.stream), data)
       assert.equal(smpTile.contentType, 'image/png')
     }
+    assert(tileCount > 10, 'expected more than 10 tiles')
   }
 })
 
@@ -51,7 +54,7 @@ test('convert from MBTiles', async (t) => {
  * @param {Record<string, string | number>} variables - An object where the keys correspond to variable names and values correspond to the replacement values.
  * @returns {string} The string with the variables replaced by their corresponding values.
  */
-export function replaceVariables(template, variables) {
+function replaceVariables(template, variables) {
   return template.replace(/{(.*?)}/g, (match, varName) => {
     return varName in variables ? String(variables[varName]) : match
   })
