@@ -1,0 +1,25 @@
+{
+  "version": 8,
+  "name": "Example (fake)",
+  "sources": {
+    "source1": {
+      "type": "vector",
+      "url": "https://example.com/source1.json"
+    },
+    "source2": {
+      "type": "vector",
+      "url": "https://example.com/source2.json"
+    }
+  },
+  "glyph": "https://example.com/font/{fontstack}/{range}.pbf",
+  "sprite": "https://example.com/sprite",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#f8f4f0"
+      }
+    }
+  ]
+}
