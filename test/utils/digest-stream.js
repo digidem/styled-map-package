@@ -12,6 +12,7 @@ export class DigestStream extends Transform {
     this.#hash = createHash(algorithm)
   }
   /**
+   * @override
    * @param {*} chunk
    * @param {BufferEncoding} encoding
    * @param {import('node:stream').TransformCallback} callback

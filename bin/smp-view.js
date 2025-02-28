@@ -47,6 +47,7 @@ function serve({ port = 3000, filepath }) {
 
   server.register(smpServer, {
     filepath: path.relative(process.cwd(), filepath),
+    prefix: '/map',
   })
   return server.listen({ port })
 }
