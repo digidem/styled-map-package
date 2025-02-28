@@ -16,7 +16,8 @@
     "forceConsistentCasingInFileNames": true,
 
     "skipLibCheck": true,
-    "typeRoots": ["types", "node_modules/@types"]
+    "typeRoots": ["types", "node_modules/@types"],
+    "rootDir": "."
   },
   "include": ["**/*"],
   "exclude": ["node_modules"]
