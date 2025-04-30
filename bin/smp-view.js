@@ -6,7 +6,7 @@ import openApp from 'open'
 
 import path from 'node:path'
 
-import smpServer from '../lib/server.js'
+import smpServer from '../dist/server.js'
 
 const program = new Command()
 

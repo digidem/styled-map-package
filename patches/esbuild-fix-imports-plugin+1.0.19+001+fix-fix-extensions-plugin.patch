@@ -1,0 +1,72 @@
+diff --git a/node_modules/esbuild-fix-imports-plugin/dist/cjs/fixExtensionsPlugin.cjs b/node_modules/esbuild-fix-imports-plugin/dist/cjs/fixExtensionsPlugin.cjs
+index 1b15e6e..cc18a13 100644
+--- a/node_modules/esbuild-fix-imports-plugin/dist/cjs/fixExtensionsPlugin.cjs
++++ b/node_modules/esbuild-fix-imports-plugin/dist/cjs/fixExtensionsPlugin.cjs
+@@ -48,6 +48,7 @@ const fixExtensionsPlugin = () => ({
+ const CJS_RELATIVE_IMPORT_EXP = /require\s*\(\s*["'](\..+?)["']\s*\)(;?)/g;
+ const ESM_RELATIVE_IMPORT_EXP = /from\s*(["'])(\.[^"']+)\1([^;]*;?)/g;
+ const hasExtensionRegex = /\.(?:png|svg|css|scss|csv|tsv|xml|toml|ini|jpe?g|json|md|mdx|json|yaml|gif|webp|ico|mp4|webm|ogg|wav|mp3|m4a|aac|webm|woff2?|eot|ttf|otf|wasm)$/i;
++const hasJSExtensionRegex = /\.(?:js)$/i;
+ const modifyRelativeImports = (contents, isEsm, outExtension) => isEsm ? modifyEsmImports(contents, outExtension) : modifyCjsImports(contents, outExtension);
+ const modifyEsmImports = (contents, outExtension) => {
+   return contents.replace(
+@@ -62,6 +63,9 @@ const modifyEsmImports = (contents, outExtension) => {
+       if (hasExtensionRegex.test(importPath)) {
+         return `from ${quote}${importPath}${quote}${rest}`;
+       }
++      if (hasJSExtensionRegex.test(importPath) && outExtension !== '.js') {
++        return `from ${quote}${importPath.replace(hasJSExtensionRegex, outExtension)}${quote}${rest}`
++      }
+       return `from ${quote}${importPath}${outExtension}${quote}${rest}`;
+     }
+   );
+@@ -79,6 +83,9 @@ const modifyCjsImports = (contents, outExtension) => {
+       if (hasExtensionRegex.test(importPath)) {
+         return `require('${importPath}')${maybeSemicolon}`;
+       }
++      if (hasJSExtensionRegex.test(importPath) && outExtension !== '.js') {
++        return `require('${importPath.replace(hasJSExtensionRegex, outExtension)}')${maybeSemicolon}`;
++      }
+       return `require('${importPath}${outExtension}')${maybeSemicolon}`;
+     }
+   );
+diff --git a/node_modules/esbuild-fix-imports-plugin/dist/esm/fixExtensionsPlugin.mjs b/node_modules/esbuild-fix-imports-plugin/dist/esm/fixExtensionsPlugin.mjs
+index e91ddc8..9f33e8d 100644
+--- a/node_modules/esbuild-fix-imports-plugin/dist/esm/fixExtensionsPlugin.mjs
++++ b/node_modules/esbuild-fix-imports-plugin/dist/esm/fixExtensionsPlugin.mjs
+@@ -12,6 +12,7 @@ const fixExtensionsPlugin = () => ({
+           continue;
+         }
+         const fileContents = outputFile.text;
++
+         const nextFileContents = modifyRelativeImports(
+           fileContents,
+           isEsm,
+@@ -25,6 +26,7 @@ const fixExtensionsPlugin = () => ({
+ const CJS_RELATIVE_IMPORT_EXP = /require\s*\(\s*["'](\..+?)["']\s*\)(;?)/g;
+ const ESM_RELATIVE_IMPORT_EXP = /from\s*(["'])(\.[^"']+)\1([^;]*;?)/g;
+ const hasExtensionRegex = /\.(?:png|svg|css|scss|csv|tsv|xml|toml|ini|jpe?g|json|md|mdx|json|yaml|gif|webp|ico|mp4|webm|ogg|wav|mp3|m4a|aac|webm|woff2?|eot|ttf|otf|wasm)$/i;
++const hasJSExtensionRegex = /\.(?:js)$/i;
+ const modifyRelativeImports = (contents, isEsm, outExtension) => isEsm ? modifyEsmImports(contents, outExtension) : modifyCjsImports(contents, outExtension);
+ const modifyEsmImports = (contents, outExtension) => {
+   return contents.replace(
+@@ -39,6 +41,9 @@ const modifyEsmImports = (contents, outExtension) => {
+       if (hasExtensionRegex.test(importPath)) {
+         return `from ${quote}${importPath}${quote}${rest}`;
+       }
++      if (hasJSExtensionRegex.test(importPath) && outExtension !== '.js') {
++        return `from ${quote}${importPath.replace(hasJSExtensionRegex, outExtension)}${quote}${rest}`
++      }
+       return `from ${quote}${importPath}${outExtension}${quote}${rest}`;
+     }
+   );
+@@ -56,6 +61,9 @@ const modifyCjsImports = (contents, outExtension) => {
+       if (hasExtensionRegex.test(importPath)) {
+         return `require('${importPath}')${maybeSemicolon}`;
+       }
++      if (hasJSExtensionRegex.test(importPath) && outExtension !== '.js') {
++        return `require('${importPath.replace(hasJSExtensionRegex, outExtension)}')${maybeSemicolon}`;
++      }
+       return `require('${importPath}${outExtension}')${maybeSemicolon}`;
+     }
+   );
