@@ -4,44 +4,44 @@
   "description": "",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/lib/index.d.ts",
       "import": "./lib/index.js"
     },
     "./reader": {
-      "types": "./dist/reader.d.ts",
+      "types": "./dist/lib/reader.d.ts",
       "import": "./lib/reader.js"
     },
     "./reader-watch": {
-      "types": "./dist/reader-watch.d.ts",
+      "types": "./dist/lib/reader-watch.d.ts",
       "import": "./lib/reader-watch.js"
     },
     "./writer": {
-      "types": "./dist/writer.d.ts",
+      "types": "./dist/lib/writer.d.ts",
       "import": "./lib/writer.js"
     },
     "./server": {
-      "types": "./dist/server.d.ts",
+      "types": "./dist/lib/server.d.ts",
       "import": "./lib/server.js"
     },
     "./style-downloader": {
-      "types": "./dist/style-downloader.d.ts",
+      "types": "./dist/lib/style-downloader.d.ts",
       "import": "./lib/style-downloader.js"
     },
     "./tile-downloader": {
-      "types": "./dist/tile-downloader.d.ts",
+      "types": "./dist/lib/tile-downloader.d.ts",
       "import": "./lib/tile-downloader.js"
     },
     "./download": {
-      "types": "./dist/download.d.ts",
+      "types": "./dist/lib/download.d.ts",
       "import": "./lib/download.js"
     },
     "./from-mbtiles": {
-      "types": "./dist/from-mbtiles.d.ts",
+      "types": "./dist/lib/from-mbtiles.d.ts",
       "import": "./lib/from-mbtiles.js"
     }
   },
   "main": "./lib/index.js",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/lib/index.d.ts",
   "bin": {
     "styled-map-package": "./bin/smp.js",
     "smp": "./bin/smp.js"
