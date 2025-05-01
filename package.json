@@ -181,7 +181,6 @@
     "png-stream": "^1.0.5",
     "prettier": "^3.5.2",
     "random-bytes-readable-stream": "^3.0.0",
-    "rimraf": "^4.4.1",
     "tempy": "^3.1.0",
     "tsup": "^8.4.0",
     "type-fest": "^4.35.0",
