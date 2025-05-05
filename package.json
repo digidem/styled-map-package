@@ -120,7 +120,6 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@commander-js/extra-typings": "^12.1.0",
     "@fastify/static": "^7.0.4",
     "@inquirer/prompts": "^6.0.1",
     "@mapbox/sphericalmercator": "^1.2.0",
@@ -154,6 +153,7 @@
     "yocto-queue": "^1.1.1"
   },
   "devDependencies": {
+    "@commander-js/extra-typings": "^12.1.0",
     "@eslint/js": "^9.25.1",
     "@jsquash/jpeg": "^1.4.0",
     "@jsquash/png": "^3.0.1",
