@@ -2,7 +2,7 @@
 import { Command } from 'commander'
 import { pipeline } from 'stream/promises'
 
-import fromMBTiles from '../lib/from-mbtiles.js'
+import { fromMBTiles } from '../dist/from-mbtiles.js'
 
 const program = new Command()
 

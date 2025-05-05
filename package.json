@@ -2,64 +2,119 @@
   "name": "styled-map-package",
   "version": "2.2.1",
   "description": "",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/lib/index.d.ts",
-      "import": "./lib/index.js"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./reader": {
-      "types": "./dist/lib/reader.d.ts",
-      "import": "./lib/reader.js"
+      "import": {
+        "types": "./dist/reader.d.ts",
+        "default": "./dist/reader.js"
+      },
+      "require": {
+        "types": "./dist/reader.d.cts",
+        "default": "./dist/reader.cjs"
+      }
     },
     "./reader-watch": {
-      "types": "./dist/lib/reader-watch.d.ts",
-      "import": "./lib/reader-watch.js"
+      "import": {
+        "types": "./dist/reader-watch.d.ts",
+        "default": "./dist/reader-watch.js"
+      },
+      "require": {
+        "types": "./dist/reader-watch.d.cts",
+        "default": "./dist/reader-watch.cjs"
+      }
     },
     "./writer": {
-      "types": "./dist/lib/writer.d.ts",
-      "import": "./lib/writer.js"
+      "import": {
+        "types": "./dist/writer.d.ts",
+        "default": "./dist/writer.js"
+      },
+      "require": {
+        "types": "./dist/writer.d.cts",
+        "default": "./dist/writer.cjs"
+      }
     },
     "./server": {
-      "types": "./dist/lib/server.d.ts",
-      "import": "./lib/server.js"
+      "import": {
+        "types": "./dist/server.d.ts",
+        "default": "./dist/server.js"
+      },
+      "require": {
+        "types": "./dist/server.d.cts",
+        "default": "./dist/server.cjs"
+      }
     },
     "./style-downloader": {
-      "types": "./dist/lib/style-downloader.d.ts",
-      "import": "./lib/style-downloader.js"
+      "import": {
+        "types": "./dist/style-downloader.d.ts",
+        "default": "./dist/style-downloader.js"
+      },
+      "require": {
+        "types": "./dist/style-downloader.d.cts",
+        "default": "./dist/style-downloader.cjs"
+      }
     },
     "./tile-downloader": {
-      "types": "./dist/lib/tile-downloader.d.ts",
-      "import": "./lib/tile-downloader.js"
+      "import": {
+        "types": "./dist/tile-downloader.d.ts",
+        "default": "./dist/tile-downloader.js"
+      },
+      "require": {
+        "types": "./dist/tile-downloader.d.cts",
+        "default": "./dist/tile-downloader.cjs"
+      }
     },
     "./download": {
-      "types": "./dist/lib/download.d.ts",
-      "import": "./lib/download.js"
+      "import": {
+        "types": "./dist/download.d.ts",
+        "default": "./dist/download.js"
+      },
+      "require": {
+        "types": "./dist/download.d.cts",
+        "default": "./dist/download.cjs"
+      }
     },
     "./from-mbtiles": {
-      "types": "./dist/lib/from-mbtiles.d.ts",
-      "import": "./lib/from-mbtiles.js"
-    }
+      "import": {
+        "types": "./dist/from-mbtiles.d.ts",
+        "default": "./dist/from-mbtiles.js"
+      },
+      "require": {
+        "types": "./dist/from-mbtiles.d.cts",
+        "default": "./dist/from-mbtiles.cjs"
+      }
+    },
+    "./package.json": "./package.json"
   },
-  "main": "./lib/index.js",
-  "types": "./dist/lib/index.d.ts",
   "bin": {
     "styled-map-package": "./bin/smp.js",
     "smp": "./bin/smp.js"
   },
-  "type": "module",
   "files": [
     "bin",
     "dist",
-    "lib",
     "map-viewer"
   ],
   "scripts": {
-    "test": "npm run lint && npm run types && node --test",
+    "test": "npm run lint && npm run build && npm run types && node --test",
     "prepare": "husky",
     "lint": "eslint .",
     "types": "tsc",
-    "build:types": "rimraf \"dist/\" && tsc -p tsconfig.publish.json",
-    "prepack": "npm run build:types"
+    "build": "tsup",
+    "prepack": "npm run build"
   },
   "keywords": [],
   "author": "",
@@ -99,14 +154,12 @@
     "yocto-queue": "^1.1.1"
   },
   "devDependencies": {
-    "@eslint/js": "^9.21.0",
+    "@eslint/js": "^9.25.1",
     "@jsquash/jpeg": "^1.4.0",
     "@jsquash/png": "^3.0.1",
     "@stealthybox/jpg-stream": "^1.1.2",
     "@trivago/prettier-plugin-sort-imports": "^4.3.0",
     "@types/archiver": "^6.0.3",
-    "@types/eslint": "^9.6.1",
-    "@types/eslint__js": "^8.42.3",
     "@types/geojson": "^7946.0.16",
     "@types/http-errors": "^2.0.4",
     "@types/mapbox__sphericalmercator": "^1.2.3",
@@ -115,9 +168,10 @@
     "@types/yauzl-promise": "^4.0.1",
     "ava": "^6.2.0",
     "block-stream2": "^2.1.0",
-    "eslint": "^9.21.0",
+    "esbuild-fix-imports-plugin": "^1.0.20",
+    "eslint": "^9.25.1",
     "execa": "^9.4.0",
-    "globals": "^15.9.0",
+    "globals": "^16.0.0",
     "husky": "^9.1.7",
     "jpg-stream": "^1.1.2",
     "lint-staged": "^15.4.3",
@@ -126,8 +180,8 @@
     "png-stream": "^1.0.5",
     "prettier": "^3.5.2",
     "random-bytes-readable-stream": "^3.0.0",
-    "rimraf": "^4.4.1",
     "tempy": "^3.1.0",
+    "tsup": "^8.4.0",
     "type-fest": "^4.35.0",
     "typescript": "^5.7.3"
   },
