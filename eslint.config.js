@@ -14,6 +14,25 @@ export default [
         ...globals.node,
       },
     },
-    rules: {},
+  },
+  {
+    // Publishing code that uses default exports can affect usage of the published module.
+    // See https://github.com/digidem/styled-map-package/pull/45 for more context.
+    name: 'no default exports in source',
+    files: ['lib/**/*.js'],
+    rules: {
+      'no-restricted-exports': [
+        'error',
+        {
+          restrictDefaultExports: {
+            direct: true,
+            named: true,
+            defaultFrom: true,
+            namedFrom: true,
+            namespaceFrom: true,
+          },
+        },
+      ],
+    },
   },
 ]
