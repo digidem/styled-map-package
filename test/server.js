@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 
 import { ReaderWatch } from '../lib/reader-watch.js'
 import { Reader } from '../lib/reader.js'
-import { Server } from '../lib/server.js'
+import { createServer } from '../lib/server.js'
 import { noop } from '../lib/utils/misc.js'
 import { validateStyle } from '../lib/utils/style.js'
 import { replaceVariables } from '../lib/utils/templates.js'
@@ -21,7 +21,7 @@ test('server basic (filepath)', async (t) => {
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
   )
   const fastify = createFastify()
-  fastify.register(Server, { filepath })
+  fastify.register(createServer, { filepath })
   await fastify.listen()
   t.after(() => fastify.close())
   const response = await fastify.inject({ url: '/style.json' })
@@ -86,7 +86,7 @@ test('server basic (reader)', async (t) => {
   )
   const reader = new Reader(filepath)
   const fastify = createFastify()
-  fastify.register(Server, { reader })
+  fastify.register(createServer, { reader })
   await fastify.listen()
   t.after(async () => {
     await fastify.close()
@@ -156,7 +156,7 @@ test(
       new URL('./fixtures/demotiles-z2.smp', import.meta.url),
     )
     const fastify = createFastify()
-    fastify.register(Server, { filepath })
+    fastify.register(createServer, { filepath })
     await fastify.listen()
     // The server opens two file descriptors: one for the SMP Reader and one for the fs.watch()
     assert((await fdCount(filepath)) > 0)
@@ -171,7 +171,7 @@ test("server.close() doesn't close reader passed as argument", async () => {
   )
   const reader = new Reader(filepath)
   const fastify = createFastify()
-  fastify.register(Server, { reader })
+  fastify.register(createServer, { reader })
   await fastify.listen()
   await fastify.close()
   assert(await reader.getStyle(), 'reader is still open')
@@ -181,7 +181,7 @@ test('server invalid filepath with ReaderWatch', async () => {
   const filepath = 'invalid_file_path'
   const reader = new ReaderWatch(filepath)
   const fastify = createFastify()
-  fastify.register(Server, { reader })
+  fastify.register(createServer, { reader })
   await fastify.listen()
   {
     const response = await fastify.inject({ url: '/style.json' })
@@ -202,7 +202,7 @@ test('server invalid file with ReaderWatch', async (t) => {
   const filepath = await temporaryWrite(randomBytes(1024))
   const reader = new ReaderWatch(filepath)
   const fastify = createFastify()
-  fastify.register(Server, { reader })
+  fastify.register(createServer, { reader })
   await fastify.listen()
   t.after(async () => {
     await fastify.close()
@@ -220,7 +220,7 @@ test('server file present after server starts with ReaderWatch', async (t) => {
   const reader = new ReaderWatch(filepath)
 
   const fastify = createFastify()
-  fastify.register(Server, { reader })
+  fastify.register(createServer, { reader })
   await fastify.listen()
   t.after(async () => {
     await fastify.close()
@@ -250,7 +250,7 @@ test('invalid file replaced after server starts with ReaderWatch', async (t) => 
   const reader = new ReaderWatch(filepath)
 
   const fastify = createFastify()
-  fastify.register(Server, { reader })
+  fastify.register(createServer, { reader })
   await fastify.listen()
   t.after(async () => {
     await fastify.close()
@@ -283,7 +283,7 @@ test('file removed (rm) after server starts with ReaderWatch', async (t) => {
   const reader = new ReaderWatch(filepath)
 
   const fastify = createFastify()
-  fastify.register(Server, { reader })
+  fastify.register(createServer, { reader })
   await fastify.listen()
   t.after(async () => {
     await fastify.close()
@@ -315,7 +315,7 @@ test('file removed (unlink) after server starts with ReaderWatch', async (t) => 
   const reader = new ReaderWatch(filepath)
 
   const fastify = createFastify()
-  fastify.register(Server, { reader })
+  fastify.register(createServer, { reader })
   await fastify.listen()
   t.after(async () => {
     await fastify.close()
@@ -350,7 +350,7 @@ test('file changed after server starts with ReaderWatch', async (t) => {
   const reader = new ReaderWatch(filepath)
 
   const fastify = createFastify()
-  fastify.register(Server, { reader })
+  fastify.register(createServer, { reader })
   await fastify.listen()
   t.after(async () => {
     await fastify.close()
@@ -386,7 +386,7 @@ test('file changed twice after server starts with ReaderWatch', async (t) => {
   const reader = new ReaderWatch(filepath)
 
   const fastify = createFastify()
-  fastify.register(Server, { reader })
+  fastify.register(createServer, { reader })
   await fastify.listen()
 
   await t.test('1st fixture is served initially', async () => {
