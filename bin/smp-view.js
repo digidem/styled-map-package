@@ -6,7 +6,7 @@ import openApp from 'open'
 
 import path from 'node:path'
 
-import smpServer from '../dist/server.js'
+import { Server } from '../dist/server.js'
 
 const program = new Command()
 
@@ -45,7 +45,7 @@ function serve({ port = 3000, filepath }) {
     return reply.sendFile('index.html')
   })
 
-  server.register(smpServer, {
+  server.register(Server, {
     filepath: path.relative(process.cwd(), filepath),
     prefix: '/map',
   })

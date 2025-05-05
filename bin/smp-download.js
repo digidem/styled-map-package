@@ -4,7 +4,7 @@ import { input, number } from '@inquirer/prompts'
 import fs from 'fs'
 import { pipeline } from 'stream/promises'
 
-import download from '../dist/download.js'
+import { download } from '../dist/download.js'
 import { ttyReporter } from '../dist/reporters.js'
 import { isMapboxURL, API_URL as MAPBOX_API_URL } from '../dist/utils/mapbox.js'
 
