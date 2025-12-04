@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { Command, InvalidArgumentError } from '@commander-js/extra-typings'
 import { input, number } from '@inquirer/prompts'
+import { Command, InvalidArgumentError } from 'commander'
 import fs from 'fs'
 import { pipeline } from 'stream/promises'
 
