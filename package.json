@@ -164,7 +164,7 @@
     "@types/geojson": "^7946.0.16",
     "@types/http-errors": "^2.0.4",
     "@types/mapbox__sphericalmercator": "^1.2.3",
-    "@types/node": "^20.16.3",
+    "@types/node": "^18.19.130",
     "@types/readable-stream": "^4.0.18",
     "@types/yauzl-promise": "^4.0.1",
     "ava": "^6.2.0",
