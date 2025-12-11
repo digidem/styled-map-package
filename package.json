@@ -1,7 +1,7 @@
 {
   "name": "styled-map-package",
   "version": "4.0.0",
-  "description": "",
+  "description": "A Styled Map Package (`.smp`) file is a Zip archive containing all the resources needed to serve a Maplibre vector styled map offline. This includes the style JSON, vector and raster tiles, glyphs (fonts), the sprite image, and the sprite metadata.",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -100,8 +100,8 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "styled-map-package": "./bin/smp.js",
-    "smp": "./bin/smp.js"
+    "styled-map-package": "bin/smp.js",
+    "smp": "bin/smp.js"
   },
   "files": [
     "bin",
@@ -203,5 +203,16 @@
       "eslint --cache --fix"
     ],
     "*.{js,css,md}": "prettier --write"
+  },
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/digidem/styled-map-package.git"
+  },
+  "bugs": {
+    "url": "https://github.com/digidem/styled-map-package/issues"
   }
 }
