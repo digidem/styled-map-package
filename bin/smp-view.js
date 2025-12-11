@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import fastifyStatic from '@fastify/static'
+import { createServerAdapter } from '@whatwg-node/server'
 import { Command } from 'commander'
 import fastify from 'fastify'
 import openApp from 'open'
 
 import path from 'node:path'
 
+import { Reader } from '../dist/reader.js'
 import { createServer } from '../dist/server.js'
 
 const program = new Command()
@@ -35,6 +37,12 @@ program.parseAsync(process.argv)
  * @returns
  */
 function serve({ port = 3000, filepath }) {
+  const reader = new Reader(path.relative(process.cwd(), filepath))
+  const smpServer = createServer({ base: '/map' })
+  const serverAdapter = createServerAdapter((request) => {
+    return smpServer.fetch(request, reader)
+  })
+
   const server = fastify()
 
   server.register(fastifyStatic, {
@@ -45,9 +53,12 @@ function serve({ port = 3000, filepath }) {
     return reply.sendFile('index.html')
   })
 
-  server.register(createServer, {
-    filepath: path.relative(process.cwd(), filepath),
-    prefix: '/map',
+  server.route({
+    url: '/map/*',
+    method: ['GET', 'HEAD', 'OPTIONS'],
+    handler: (req, reply) => {
+      return serverAdapter.handleNodeRequestAndResponse(req, reply)
+    },
   })
   return server.listen({ port })
 }
