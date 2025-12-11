@@ -100,3 +100,18 @@ test('server 404', async () => {
     })
   }
 })
+
+test('server with base path', async () => {
+  const filepath = fileURLToPath(
+    new URL('./fixtures/demotiles-z2.smp', import.meta.url),
+  )
+  const reader = new Reader(filepath)
+  const server = createServer({ base: '/maps/my-map/' })
+  const response = await server.fetch(
+    new Request('http://example.com/maps/my-map/style.json'),
+    reader,
+  )
+  assert.equal(response.status, 200)
+  const style = await response.json()
+  assert(validateStyle(style), 'style is valid')
+})
