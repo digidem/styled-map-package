@@ -1,7 +1,7 @@
 import SphericalMercator from '@mapbox/sphericalmercator'
 import { bbox as turfBbox } from '@turf/bbox'
 import randomStream from 'random-bytes-readable-stream'
-import { fromBuffer as zipFromBuffer } from 'yauzl-promise'
+import { fromBuffer, fromBuffer as zipFromBuffer } from 'yauzl-promise'
 
 import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
@@ -571,6 +571,85 @@ test('Raster tiles write and read', async () => {
 
   assert.equal(pngTileHashOut, pngTileHash, 'PNG tile is the same')
   assert.equal(jpgTileHashOut, jpgTileHash, 'JPG tile is the same')
+})
+
+test.only('Optimized central directory order', async () => {
+  const styleInUrl = new URL(
+    './fixtures/valid-styles/all-types.input.json',
+    import.meta.url,
+  )
+
+  /** @type {import('@maplibre/maplibre-gl-style-spec').StyleSpecification} */
+  const styleIn = await readJson(styleInUrl)
+  const writer = new Writer(styleIn)
+
+  const bounds = /** @type {BBox} */ ([-40.6, -50.6, 151.6, 76.0])
+
+  for (const { x, y, z } of tileIterator({ maxzoom: 5, bounds })) {
+    for (const sourceId of ['source1', 'source2']) {
+      const stream = randomStream({ size: random(2048, 4096) }).pipe(
+        new DigestStream('md5'),
+      )
+      await writer.addTile(stream, { x, y, z, sourceId, format: 'mvt' })
+    }
+  }
+
+  for (const range of glyphRanges()) {
+    for (const font of ['font1', 'font2']) {
+      const stream = randomStream({ size: random(256, 1024) }).pipe(
+        new DigestStream('md5'),
+      )
+      await writer.addGlyphs(stream, { range, font })
+    }
+  }
+
+  const spriteImageStream = randomStream({ size: random(1024, 2048) }).pipe(
+    new DigestStream('md5'),
+  )
+  const spriteLayoutIn = {
+    airfield_11: {
+      height: 17,
+      pixelRatio: 1,
+      width: 17,
+      x: 21,
+      y: 0,
+    },
+  }
+  await writer.addSprite({
+    png: spriteImageStream,
+    json: JSON.stringify(spriteLayoutIn),
+  })
+
+  writer.finish()
+
+  const smp = await streamToBuffer(writer.outputStream)
+  const zip = await fromBuffer(smp)
+  const entries = await zip.readEntries()
+  const entriesFilenames = entries.map((e) => e.filename)
+
+  // 1. style.json
+  // 2. glyphs for 0-255 UTF codes
+  // 3. sources ordered by zoom level
+  const expectedFirstEntriesFilenames = [
+    'style.json',
+    'fonts/font2/0-255.pbf.gz',
+    'fonts/font1/0-255.pbf.gz',
+    's/0/0/0/0.mvt.gz',
+    's/1/0/0/0.mvt.gz',
+    's/0/1/0/0.mvt.gz',
+    's/1/1/0/0.mvt.gz',
+    's/0/1/0/1.mvt.gz',
+    's/1/1/0/1.mvt.gz',
+    's/0/1/1/0.mvt.gz',
+    's/1/1/1/0.mvt.gz',
+    's/0/1/1/1.mvt.gz',
+    's/1/1/1/1.mvt.gz',
+  ]
+
+  assert.deepStrictEqual(
+    entriesFilenames.slice(0, expectedFirstEntriesFilenames.length),
+    expectedFirstEntriesFilenames,
+  )
 })
 
 /**
