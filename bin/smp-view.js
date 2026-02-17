@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import fastifyStatic from '@fastify/static'
 import { createServerAdapter } from '@whatwg-node/server'
 import { Command } from 'commander'
-import fastify from 'fastify'
+import fsPromises from 'fs/promises'
+import http from 'http'
+import { AutoRouter } from 'itty-router'
 import openApp from 'open'
 
 import path from 'node:path'
@@ -28,37 +29,45 @@ program
 program.parseAsync(process.argv)
 
 /**
- * Serve a styled map package on the given port (defaults to 3000). Use the
- * fastify plugin in `./server.js` for more flexibility.
+ * Serve a styled map package on the given port (defaults to 3000).
  *
  * @param {object} opts
  * @param {number} [opts.port]
  * @param {string} opts.filepath
  * @returns
  */
-function serve({ port = 3000, filepath }) {
+async function serve({ port = 3000, filepath }) {
   const reader = new Reader(path.relative(process.cwd(), filepath))
   const smpServer = createServer({ base: '/map' })
-  const serverAdapter = createServerAdapter((request) => {
+
+  const router = AutoRouter()
+  router.get('/', async () => {
+    const index = await fsPromises.readFile(
+      new URL('../map-viewer/index.html', import.meta.url),
+    )
+    return new Response(new Uint8Array(index), {
+      headers: {
+        'Content-Type': 'text/html',
+        'Content-Length': String(index.byteLength),
+        'Cache-Control': 'public, max-age=0',
+      },
+    })
+  })
+  router.all('/map/*', (request) => {
     return smpServer.fetch(request, reader)
   })
-
-  const server = fastify()
-
-  server.register(fastifyStatic, {
-    root: new URL('../map-viewer', import.meta.url),
-    serve: false,
+  const server = http.createServer(createServerAdapter(router.fetch))
+  return new Promise((resolve, reject) => {
+    server.listen(port, '127.0.0.1', () => {
+      const address = server.address()
+      if (typeof address === 'string') {
+        resolve(`http://${address}`)
+      } else if (address === null) {
+        reject(new Error('Failed to get server address'))
+      } else {
+        resolve(`http://${address.address}:${address.port}`)
+      }
+    })
+    server.on('error', reject)
   })
-  server.get('/', async (request, reply) => {
-    return reply.sendFile('index.html')
-  })
-
-  server.route({
-    url: '/map/*',
-    method: ['GET', 'HEAD', 'OPTIONS'],
-    handler: (req, reply) => {
-      return serverAdapter.handleNodeRequestAndResponse(req, reply)
-    },
-  })
-  return server.listen({ port })
 }
