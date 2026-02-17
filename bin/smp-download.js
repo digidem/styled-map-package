@@ -4,9 +4,9 @@ import { input, number } from '@inquirer/prompts'
 import fs from 'fs'
 import { pipeline } from 'stream/promises'
 
-import download from '../lib/download.js'
-import { ttyReporter } from '../lib/reporters.js'
-import { isMapboxURL, API_URL as MAPBOX_API_URL } from '../lib/utils/mapbox.js'
+import { download } from '../dist/download.js'
+import { ttyReporter } from '../dist/reporters.js'
+import { isMapboxURL, API_URL as MAPBOX_API_URL } from '../dist/utils/mapbox.js'
 
 const program = new Command()
 
