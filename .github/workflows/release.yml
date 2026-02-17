@@ -6,10 +6,10 @@ on:
       semver:
         description: 'The semver to use'
         required: true
-        default: 'patch'
+        default: 'auto'
         type: choice
         options:
-          # - auto
+          - auto
           - patch
           - minor
           - major
@@ -28,20 +28,15 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+      id-token: write
     steps:
-      - name: Use Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - uses: actions/checkout@v4
-      - uses: nearform-actions/optic-release-automation-action@v4
+      - uses: nearform-actions/optic-release-automation-action@a2785548e8bdafab7e628c2317b604278e460434 # v4.12.2
         with:
           commit-message: 'Release {version}'
           sync-semver-tags: true
           access: 'public'
           semver: ${{ github.event.inputs.semver }}
           notify-linked-issues: false
-          # optional: set this secret in your repo config for publishing to NPM
-          npm-token: ${{ secrets.NPM_TOKEN }}
+          publish-mode: oidc
           build-command: |
             npm ci

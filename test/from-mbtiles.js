@@ -8,8 +8,8 @@ import { pipeline } from 'node:stream/promises'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-import convert from '../lib/from-mbtiles.js'
-import SMPReader from '../lib/reader.js'
+import { fromMBTiles } from '../lib/from-mbtiles.js'
+import { Reader } from '../lib/reader.js'
 
 test('convert from MBTiles', async (t) => {
   const fixture = fileURLToPath(
@@ -24,12 +24,12 @@ test('convert from MBTiles', async (t) => {
   })
 
   await Promise.all([
-    convert(fixture, output1),
-    pipeline(convert(fixture), fs.createWriteStream(output2)),
+    fromMBTiles(fixture, output1),
+    pipeline(fromMBTiles(fixture), fs.createWriteStream(output2)),
   ])
 
   for (const output of [output1, output2]) {
-    const smp = new SMPReader(output)
+    const smp = new Reader(output)
     const mbtiles = new MBTiles(fixture)
     const style = await smp.getStyle('')
     const sourceMetadata = Object.values(style.sources)[0]
