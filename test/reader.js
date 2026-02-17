@@ -30,8 +30,11 @@ test('Reader, invalid non-zip file', async () => {
 
 test('Reader, invalid non-zip file does not leak file descriptors', async () => {
   // Record the next available FD before the test. If no FDs are leaked, we
-  // expect to get the same number after close().
-  const fdBefore = openSync('/dev/null', 'r')
+  // expect to get the same number after close(). Node.js allocates file
+  // descriptors sequentially from the lowest available slot on all platforms
+  // (via the CRT on Windows, and directly via the kernel on Unix).
+  const nullDevice = process.platform === 'win32' ? '\\\\.\\nul' : '/dev/null'
+  const fdBefore = openSync(nullDevice, 'r')
   closeSync(fdBefore)
 
   const reader = new Reader(await temporaryWrite(randomBytes(1024)))
@@ -39,7 +42,7 @@ test('Reader, invalid non-zip file does not leak file descriptors', async () => 
   await reader.opened().catch(() => {})
   await reader.close()
 
-  const fdAfter = openSync('/dev/null', 'r')
+  const fdAfter = openSync(nullDevice, 'r')
   closeSync(fdAfter)
 
   assert.equal(fdAfter, fdBefore, 'no file descriptors should be leaked')
