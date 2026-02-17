@@ -186,6 +186,9 @@
     "type-fest": "^4.35.0",
     "typescript": "^5.9.3"
   },
+  "bundleDependencies": [
+    "yauzl-promise"
+  ],
   "prettier": {
     "semi": false,
     "singleQuote": true,
