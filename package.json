@@ -120,7 +120,6 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@fastify/static": "^8.3.0",
     "@inquirer/prompts": "^6.0.1",
     "@mapbox/sphericalmercator": "^1.2.0",
     "@maplibre/maplibre-gl-style-spec": "^20.3.1",
@@ -133,7 +132,6 @@
     "buffer-peek-stream": "^1.1.0",
     "chalk": "^5.4.1",
     "commander": "^12.1.0",
-    "fastify": "^5.6.2",
     "filter-obj": "^6.1.0",
     "into-stream": "^8.0.1",
     "is-stream": "^4.0.1",
