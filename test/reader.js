@@ -4,6 +4,7 @@ import { fromBuffer } from 'yauzl-promise'
 
 import assert from 'node:assert/strict'
 import { randomBytes } from 'node:crypto'
+import { closeSync, openSync } from 'node:fs'
 import { buffer } from 'node:stream/consumers'
 import { test } from 'node:test'
 
@@ -13,7 +14,8 @@ test('Reader, invalid filepath', async () => {
   const expectedError = { code: 'ENOENT' }
   const reader = new Reader('invalid_file_path')
   await assert.rejects(reader.getStyle(), expectedError)
-  await assert.rejects(reader.close(), expectedError)
+  // close() resolves without error even when the file couldn't be opened
+  await reader.close()
   await assert.rejects(reader.getResource('/style.json'), expectedError)
 })
 
@@ -21,8 +23,29 @@ test('Reader, invalid non-zip file', async () => {
   const expectedError = { message: /End of Central Directory Record/ }
   const reader = new Reader(await temporaryWrite(randomBytes(1024)))
   await assert.rejects(reader.getStyle(), expectedError)
-  await assert.rejects(reader.close(), expectedError)
+  // close() resolves without error even when the file is not a valid zip
+  await reader.close()
   await assert.rejects(reader.getResource('/style.json'), expectedError)
+})
+
+test('Reader, invalid non-zip file does not leak file descriptors', async () => {
+  // Record the next available FD before the test. If no FDs are leaked, we
+  // expect to get the same number after close(). Node.js allocates file
+  // descriptors sequentially from the lowest available slot on all platforms
+  // (via the CRT on Windows, and directly via the kernel on Unix).
+  const nullDevice = process.platform === 'win32' ? '\\\\.\\nul' : '/dev/null'
+  const fdBefore = openSync(nullDevice, 'r')
+  closeSync(fdBefore)
+
+  const reader = new Reader(await temporaryWrite(randomBytes(1024)))
+  // Wait for the open attempt to settle (it will fail)
+  await reader.opened().catch(() => {})
+  await reader.close()
+
+  const fdAfter = openSync(nullDevice, 'r')
+  closeSync(fdAfter)
+
+  assert.equal(fdAfter, fdBefore, 'no file descriptors should be leaked')
 })
 
 test('Reader, invalid smp file', async () => {

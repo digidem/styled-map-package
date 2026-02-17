@@ -110,7 +110,7 @@
   ],
   "scripts": {
     "test": "npm run lint && npm run build && npm run types && node --test",
-    "prepare": "husky",
+    "prepare": "husky && patch-package",
     "lint": "eslint .",
     "types": "tsc",
     "build": "tsup",
@@ -176,6 +176,7 @@
     "husky": "^9.1.7",
     "jpg-stream": "^1.1.2",
     "lint-staged": "^15.4.3",
+    "patch-package": "^8.0.1",
     "pixel-stream": "^1.0.3",
     "playwright": "^1.50.1",
     "png-stream": "^1.0.5",
@@ -186,6 +187,9 @@
     "type-fest": "^4.35.0",
     "typescript": "^5.9.3"
   },
+  "bundleDependencies": [
+    "yauzl-promise"
+  ],
   "prettier": {
     "semi": false,
     "singleQuote": true,
