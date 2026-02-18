@@ -27,16 +27,6 @@
         "default": "./dist/reader.cjs"
       }
     },
-    "./reader-watch": {
-      "import": {
-        "types": "./dist/reader-watch.d.ts",
-        "default": "./dist/reader-watch.js"
-      },
-      "require": {
-        "types": "./dist/reader-watch.d.cts",
-        "default": "./dist/reader-watch.cjs"
-      }
-    },
     "./writer": {
       "import": {
         "types": "./dist/writer.d.ts",
