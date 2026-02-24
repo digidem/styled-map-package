@@ -1,4 +1,5 @@
 import archiver from 'archiver'
+import randomStream from 'random-bytes-readable-stream'
 import { temporaryWrite } from 'tempy'
 import { test } from 'vitest'
 import { fromBuffer } from 'yauzl-promise'
@@ -6,9 +7,9 @@ import { fromBuffer } from 'yauzl-promise'
 import assert from 'node:assert/strict'
 import { randomBytes } from 'node:crypto'
 import { closeSync, openSync } from 'node:fs'
-import { buffer } from 'node:stream/consumers'
+import { buffer, buffer as streamToBuffer } from 'node:stream/consumers'
 
-import { Reader } from '../lib/index.js'
+import { Reader, Writer } from '../lib/index.js'
 
 test('Reader, invalid filepath', async () => {
   const expectedError = { code: 'ENOENT' }
@@ -46,6 +47,43 @@ test('Reader, invalid non-zip file does not leak file descriptors', async () => 
   closeSync(fdAfter)
 
   assert.equal(fdAfter, fdBefore, 'no file descriptors should be leaked')
+})
+
+test('Reader.getVersion() returns version from SMP created by Writer', async () => {
+  const style = {
+    version: 8,
+    sources: { test: { type: 'vector' } },
+    layers: [{ id: 'bg', type: 'background' }],
+  }
+  const writer = new Writer(style)
+  await writer.addTile(randomStream({ size: 1024 }), {
+    x: 0,
+    y: 0,
+    z: 0,
+    sourceId: 'test',
+    format: 'mvt',
+  })
+  writer.finish()
+  const smpBuf = await streamToBuffer(writer.outputStream)
+  const zip = await fromBuffer(smpBuf)
+  const reader = new Reader(zip)
+  const version = await reader.getVersion()
+  assert.equal(version, '1.0')
+  await reader.close()
+})
+
+test('Reader.getVersion() returns null for SMP without VERSION file', async () => {
+  const archive = archiver('zip')
+  archive.append(JSON.stringify({ version: 8, sources: {}, layers: [] }), {
+    name: 'style.json',
+  })
+  archive.finalize()
+  const zipBuffer = await buffer(archive)
+  const zip = await fromBuffer(zipBuffer)
+  const reader = new Reader(zip)
+  const version = await reader.getVersion()
+  assert.equal(version, null)
+  await reader.close()
 })
 
 test('Reader, invalid smp file', async () => {
