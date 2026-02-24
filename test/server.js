@@ -102,6 +102,32 @@ test('server 404', async () => {
   }
 })
 
+test('server re-throws non-ENOENT errors', async () => {
+  const server = createServer()
+  const mockError = new Error('Corrupted data')
+  const mockReader = /** @type {any} */ ({
+    getStyle() {
+      throw mockError
+    },
+    getResource() {
+      throw mockError
+    },
+  })
+  await assert.rejects(
+    () =>
+      server.fetch(new Request('http://example.com/style.json'), mockReader),
+    { message: 'Corrupted data' },
+  )
+  await assert.rejects(
+    () =>
+      server.fetch(
+        new Request('http://example.com/s/0/0/0/0.mvt.gz'),
+        mockReader,
+      ),
+    { message: 'Corrupted data' },
+  )
+})
+
 test('server with base path', async () => {
   const filepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),

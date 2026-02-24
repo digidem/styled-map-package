@@ -654,6 +654,331 @@ test('Optimized central directory order', async () => {
   )
 })
 
+test('Tile format auto-detection for raster tiles', async () => {
+  const styleInUrl = new URL(
+    './fixtures/valid-styles/raster-sources.input.json',
+    import.meta.url,
+  )
+  const styleIn = await readJson(styleInUrl)
+  const writer = new Writer(styleIn)
+
+  const pngStream = randomImageStream({
+    width: 256,
+    height: 256,
+    format: 'png',
+  }).pipe(new DigestStream('md5'))
+  const jpgStream = randomImageStream({
+    width: 256,
+    height: 256,
+    format: 'jpg',
+  }).pipe(new DigestStream('md5'))
+
+  // No format specified — writer must auto-detect from magic bytes
+  await writer.addTile(pngStream, { x: 0, y: 0, z: 0, sourceId: 'png-tiles' })
+  await writer.addTile(jpgStream, { x: 0, y: 0, z: 0, sourceId: 'jpg-tiles' })
+  const pngTileHash = await pngStream.digest('hex')
+  const jpgTileHash = await jpgStream.digest('hex')
+
+  writer.finish()
+
+  const smp = await streamToBuffer(writer.outputStream)
+  const reader = new Reader(await zipFromBuffer(smp))
+  const readerHelper = new ReaderHelper(reader)
+
+  const styleOut = await reader.getStyle()
+  // Verify tile URIs use correct detected extensions
+  assert(
+    // @ts-expect-error - tiles exists on raster sources
+    styleOut.sources['png-tiles'].tiles[0].includes('.png'),
+    'PNG source tiles URI has .png extension',
+  )
+  assert(
+    // @ts-expect-error - tiles exists on raster sources
+    styleOut.sources['jpg-tiles'].tiles[0].includes('.jpg'),
+    'JPG source tiles URI has .jpg extension',
+  )
+
+  const pngTileHashOut = await readerHelper.getTileHash({
+    x: 0,
+    y: 0,
+    z: 0,
+    sourceId: 'png-tiles',
+  })
+  const jpgTileHashOut = await readerHelper.getTileHash({
+    x: 0,
+    y: 0,
+    z: 0,
+    sourceId: 'jpg-tiles',
+  })
+
+  assert.equal(pngTileHashOut, pngTileHash, 'PNG tile data is intact')
+  assert.equal(jpgTileHashOut, jpgTileHash, 'JPG tile data is intact')
+})
+
+test('Tile format mismatch throws an error', async () => {
+  const styleIn = {
+    version: 8,
+    sources: {
+      raster: {
+        type: 'raster',
+        tiles: ['https://example.com/{z}/{x}/{y}.png'],
+        tileSize: 256,
+      },
+    },
+    layers: [{ id: 'raster', type: 'raster', source: 'raster' }],
+  }
+  const writer = new Writer(styleIn)
+
+  const pngStream = randomImageStream({
+    width: 256,
+    height: 256,
+    format: 'png',
+  })
+  const jpgStream = randomImageStream({
+    width: 256,
+    height: 256,
+    format: 'jpg',
+  })
+
+  await writer.addTile(pngStream, { x: 0, y: 0, z: 0, sourceId: 'raster' })
+  await assert.rejects(
+    () => writer.addTile(jpgStream, { x: 1, y: 0, z: 0, sourceId: 'raster' }),
+    { message: /format mismatch/ },
+  )
+})
+
+test('Writer addTile from Buffer and Uint8Array', async () => {
+  const styleIn = {
+    version: 8,
+    sources: {
+      raster: {
+        type: 'raster',
+        tiles: ['https://example.com/{z}/{x}/{y}.png'],
+        tileSize: 256,
+      },
+    },
+    layers: [{ id: 'raster', type: 'raster', source: 'raster' }],
+  }
+  const writer = new Writer(styleIn)
+
+  const pngBuffer = await streamToBuffer(
+    randomImageStream({ width: 256, height: 256, format: 'png' }),
+  )
+
+  // Add tile as Buffer without format (auto-detection + convertSource)
+  await writer.addTile(pngBuffer, { x: 0, y: 0, z: 0, sourceId: 'raster' })
+
+  // Add tile as Uint8Array without format (Uint8Array→Readable + auto-detection)
+  const uint8 = new Uint8Array(
+    pngBuffer.buffer,
+    pngBuffer.byteOffset,
+    pngBuffer.length,
+  )
+  await writer.addTile(uint8, { x: 1, y: 0, z: 0, sourceId: 'raster' })
+
+  writer.finish()
+
+  const smp = await streamToBuffer(writer.outputStream)
+  const reader = new Reader(await zipFromBuffer(smp))
+  const readerHelper = new ReaderHelper(reader)
+
+  // Verify both tiles are readable and intact
+  const bufHash = await readerHelper.getTileHash({
+    x: 0,
+    y: 0,
+    z: 0,
+    sourceId: 'raster',
+  })
+  const uint8Hash = await readerHelper.getTileHash({
+    x: 1,
+    y: 0,
+    z: 0,
+    sourceId: 'raster',
+  })
+  assert.equal(
+    bufHash,
+    uint8Hash,
+    'Buffer and Uint8Array tiles produce same data',
+  )
+})
+
+test('addTile throws for source not in style', async () => {
+  const styleIn = {
+    version: 8,
+    sources: { test: { type: 'vector' } },
+    layers: [{ id: 'bg', type: 'background' }],
+  }
+  const writer = new Writer(styleIn)
+  await assert.rejects(
+    () =>
+      writer.addTile(randomStream({ size: 1024 }), {
+        x: 0,
+        y: 0,
+        z: 0,
+        sourceId: 'nonexistent',
+        format: 'mvt',
+      }),
+    { message: /Source not referenced in style\.json/ },
+  )
+})
+
+test('addTile throws for unsupported source type', async () => {
+  const styleIn = {
+    version: 8,
+    sources: {
+      dem: {
+        type: 'raster-dem',
+        tiles: ['https://example.com/{z}/{x}/{y}.png'],
+        tileSize: 256,
+      },
+    },
+    layers: [{ id: 'bg', type: 'background' }],
+  }
+  const writer = new Writer(styleIn)
+  await assert.rejects(
+    () =>
+      writer.addTile(randomStream({ size: 1024 }), {
+        x: 0,
+        y: 0,
+        z: 0,
+        sourceId: 'dem',
+        format: 'png',
+      }),
+    { message: /Unsupported source type/ },
+  )
+})
+
+test('addTile throws when same tile is added twice', async () => {
+  const styleIn = {
+    version: 8,
+    sources: { test: { type: 'vector' } },
+    layers: [{ id: 'bg', type: 'background' }],
+  }
+  const writer = new Writer(styleIn)
+  await writer.addTile(randomStream({ size: 1024 }), {
+    x: 0,
+    y: 0,
+    z: 0,
+    sourceId: 'test',
+    format: 'mvt',
+  })
+  await assert.rejects(
+    () =>
+      writer.addTile(randomStream({ size: 1024 }), {
+        x: 0,
+        y: 0,
+        z: 0,
+        sourceId: 'test',
+        format: 'mvt',
+      }),
+    { message: /already added/ },
+  )
+})
+
+test('Missing sprite in array of sprites throws an error', async () => {
+  const styleIn = {
+    version: 8,
+    sources: { test: { type: 'vector' } },
+    sprite: [
+      { id: 'default', url: 'https://example.com/default' },
+      { id: 'roadsigns', url: 'https://example.com/roadsigns' },
+    ],
+    layers: [{ id: 'bg', type: 'background' }],
+  }
+  const writer = new Writer(styleIn)
+  await writer.addTile(randomStream({ size: 1024 }), {
+    x: 0,
+    y: 0,
+    z: 0,
+    sourceId: 'test',
+    format: 'mvt',
+  })
+  // Add only 'default' sprite, not 'roadsigns'
+  await writer.addSprite({
+    png: randomStream({ size: 512 }),
+    json: JSON.stringify({}),
+  })
+  await assert.rejects(() => writer.finish(), {
+    message: /Missing sprite.*roadsigns/,
+  })
+})
+
+test('GeoJSON with 3D bounding box', async () => {
+  const geojsonWith3DBbox = {
+    type: 'FeatureCollection',
+    // 3D bbox: [west, south, minAlt, east, north, maxAlt]
+    bbox: [-10, -20, 0, 30, 40, 100],
+    features: [
+      {
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [10, 10, 50] },
+        properties: {},
+      },
+    ],
+  }
+  const styleIn = {
+    version: 8,
+    sources: {
+      geo: { type: 'geojson', data: geojsonWith3DBbox },
+    },
+    layers: [{ id: 'geo', type: 'circle', source: 'geo' }],
+  }
+  const writer = new Writer(styleIn)
+  writer.finish()
+  const smp = await streamToBuffer(writer.outputStream)
+  const reader = new Reader(await zipFromBuffer(smp))
+  const styleOut = await reader.getStyle()
+
+  // 3D bbox [w, s, minAlt, e, n, maxAlt] → 2D bbox [w, s, e, n]
+  assertBboxEqual(
+    styleOut.metadata['smp:bounds'],
+    [-10, -20, 30, 40],
+    '3D bbox is flattened to 2D',
+  )
+})
+
+test('createGlyphWriteStream writes glyphs', async () => {
+  const styleInUrl = new URL(
+    './fixtures/valid-styles/minimal-labelled.input.json',
+    import.meta.url,
+  )
+  /** @type {import('@maplibre/maplibre-gl-style-spec').StyleSpecification} */
+  const styleIn = await readJson(styleInUrl)
+  const writer = new Writer(styleIn)
+
+  await writer.addTile(randomStream({ size: 1024 }), {
+    x: 0,
+    y: 0,
+    z: 0,
+    sourceId: 'maplibre',
+    format: 'mvt',
+  })
+
+  const font = 'Open Sans Semibold'
+  const glyphWriteStream = writer.createGlyphWriteStream()
+
+  for (const range of glyphRanges()) {
+    glyphWriteStream.write([
+      randomStream({ size: random(256, 1024) }),
+      { range, font },
+    ])
+  }
+  glyphWriteStream.end()
+  await new Promise((resolve) => glyphWriteStream.on('finish', resolve))
+
+  writer.finish()
+
+  const smp = await streamToBuffer(writer.outputStream)
+  const reader = new Reader(await zipFromBuffer(smp))
+
+  const styleOut = await reader.getStyle()
+  assert(typeof styleOut.glyphs === 'string', 'style has glyphs URI')
+  // Verify a glyph resource is readable
+  const readerHelper = new ReaderHelper(reader)
+  const hash = await readerHelper.getGlyphHash({ range: '0-255', font })
+  assert(hash, 'glyph resource is readable')
+})
+
 /**
  *
  * @param {number} min

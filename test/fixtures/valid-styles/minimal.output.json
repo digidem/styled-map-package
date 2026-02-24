@@ -2,10 +2,7 @@
   "name": "MapLibre",
   "zoom": 3,
   "pitch": 0,
-  "center": [
-    56.25,
-    10.53212169788165
-  ],
+  "center": [56.25, 10.53212169788165],
   "layers": [
     {
       "id": "background",
@@ -13,9 +10,7 @@
       "paint": {
         "background-color": "#D8F2FF"
       },
-      "filter": [
-        "all"
-      ],
+      "filter": ["all"],
       "layout": {
         "visibility": "visible"
       },
@@ -29,12 +24,8 @@
         "line-color": "#198EC8",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           0,
           2,
           6,
@@ -45,9 +36,7 @@
           18
         ]
       },
-      "filter": [
-        "all"
-      ],
+      "filter": ["all"],
       "layout": {
         "line-cap": "round",
         "line-join": "round",
@@ -65,25 +54,13 @@
       "type": "vector",
       "minzoom": 0,
       "maxzoom": 5,
-      "bounds": [
-        -45,
-        -55.776573018667676,
-        157.5,
-        76.84081641443098
-      ],
-      "tiles": [
-        "smp://maps.v1/s/0/{z}/{x}/{y}.mvt.gz"
-      ]
+      "bounds": [-45, -55.776573018667676, 157.5, 76.84081641443098],
+      "tiles": ["smp://maps.v1/s/0/{z}/{x}/{y}.mvt.gz"]
     }
   },
   "version": 8,
   "metadata": {
-    "smp:bounds": [
-      -45,
-      -55.776573018667676,
-      157.5,
-      76.84081641443098
-    ],
+    "smp:bounds": [-45, -55.776573018667676, 157.5, 76.84081641443098],
     "smp:maxzoom": 5,
     "smp:sourceFolders": {
       "maplibre": "0"

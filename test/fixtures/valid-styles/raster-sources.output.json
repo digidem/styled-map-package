@@ -6,30 +6,16 @@
       "tileSize": 256,
       "minzoom": 0,
       "maxzoom": 0,
-      "bounds": [
-        -180,
-        -85.051129,
-        180,
-        85.051129
-      ],
-      "tiles": [
-        "smp://maps.v1/s/0/{z}/{x}/{y}.png"
-      ]
+      "bounds": [-180, -85.051129, 180, 85.051129],
+      "tiles": ["smp://maps.v1/s/0/{z}/{x}/{y}.png"]
     },
     "jpg-tiles": {
       "type": "raster",
       "tileSize": 256,
       "minzoom": 0,
       "maxzoom": 0,
-      "bounds": [
-        -180,
-        -85.051129,
-        180,
-        85.051129
-      ],
-      "tiles": [
-        "smp://maps.v1/s/1/{z}/{x}/{y}.jpg"
-      ]
+      "bounds": [-180, -85.051129, 180, 85.051129],
+      "tiles": ["smp://maps.v1/s/1/{z}/{x}/{y}.jpg"]
     }
   },
   "layers": [
@@ -48,18 +34,10 @@
       "maxzoom": 22
     }
   ],
-  "center": [
-    0,
-    0
-  ],
+  "center": [0, 0],
   "zoom": 0,
   "metadata": {
-    "smp:bounds": [
-      -180,
-      -85.051129,
-      180,
-      85.051129
-    ],
+    "smp:bounds": [-180, -85.051129, 180, 85.051129],
     "smp:maxzoom": 0,
     "smp:sourceFolders": {
       "png-tiles": "0",

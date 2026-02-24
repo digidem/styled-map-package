@@ -2,10 +2,7 @@
   "name": "MapLibre",
   "zoom": 14,
   "pitch": 0,
-  "center": [
-    0,
-    0
-  ],
+  "center": [0, 0],
   "layers": [
     {
       "id": "background",
@@ -13,9 +10,7 @@
       "paint": {
         "background-color": "#D8F2FF"
       },
-      "filter": [
-        "all"
-      ],
+      "filter": ["all"],
       "layout": {
         "visibility": "visible"
       },
@@ -29,12 +24,8 @@
         "line-color": "#198EC8",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           0,
           2,
           6,
@@ -45,9 +36,7 @@
           18
         ]
       },
-      "filter": [
-        "all"
-      ],
+      "filter": ["all"],
       "layout": {
         "line-cap": "round",
         "line-join": "round",
@@ -65,25 +54,13 @@
       "type": "vector",
       "minzoom": 0,
       "maxzoom": 0,
-      "bounds": [
-        -180,
-        -85.051129,
-        180,
-        85.051129
-      ],
-      "tiles": [
-        "smp://maps.v1/s/1/{z}/{x}/{y}.mvt.gz"
-      ]
+      "bounds": [-180, -85.051129, 180, 85.051129],
+      "tiles": ["smp://maps.v1/s/1/{z}/{x}/{y}.mvt.gz"]
     }
   },
   "version": 8,
   "metadata": {
-    "smp:bounds": [
-      -180,
-      -85.051129,
-      180,
-      85.051129
-    ],
+    "smp:bounds": [-180, -85.051129, 180, 85.051129],
     "smp:maxzoom": 16,
     "smp:sourceFolders": {
       "crimea": "0",
