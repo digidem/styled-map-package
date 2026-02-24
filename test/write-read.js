@@ -627,10 +627,12 @@ test('Optimized central directory order', async () => {
   const entries = await zip.readEntries()
   const entriesFilenames = entries.map((e) => e.filename)
 
-  // 1. style.json
-  // 2. glyphs for 0-255 UTF codes
-  // 3. sources ordered by zoom level
+  // 1. VERSION
+  // 2. style.json
+  // 3. glyphs for 0-255 UTF codes
+  // 4. sources ordered by zoom level
   const expectedFirstEntriesFilenames = [
+    'VERSION',
     'style.json',
     'fonts/font2/0-255.pbf.gz',
     'fonts/font1/0-255.pbf.gz',
