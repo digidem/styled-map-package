@@ -1,5 +1,6 @@
+import { test } from 'vitest'
+
 import assert from 'node:assert/strict'
-import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 import { Reader } from '../lib/reader.js'
