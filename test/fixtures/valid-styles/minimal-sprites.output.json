@@ -6,11 +6,18 @@
       "type": "vector",
       "minzoom": 0,
       "maxzoom": 0,
-      "bounds": [-180, -85.051129, 180, 85.051129],
-      "tiles": ["smp://maps.v1/s/0/{z}/{x}/{y}.mvt.gz"]
+      "bounds": [
+        -180,
+        -85.051129,
+        180,
+        85.051129
+      ],
+      "tiles": [
+        "/s/0/{z}/{x}/{y}.mvt.gz"
+      ]
     }
   },
-  "sprite": "smp://maps.v1/sprites/default/sprite",
+  "sprite": "/sprites/default/sprite",
   "layers": [
     {
       "id": "background",
@@ -27,32 +34,86 @@
       "minzoom": 14,
       "filter": [
         "all",
-        ["==", ["geometry-type"], "Point"],
-        ["<=", ["get", "rank"], 14],
-        ["has", "name"],
+        [
+          "==",
+          [
+            "geometry-type"
+          ],
+          "Point"
+        ],
+        [
+          "<=",
+          [
+            "get",
+            "rank"
+          ],
+          14
+        ],
+        [
+          "has",
+          "name"
+        ],
         [
           "any",
-          ["!", ["has", "level"]],
+          [
+            "!",
+            [
+              "has",
+              "level"
+            ]
+          ],
           [
             "case",
-            ["==", ["typeof", ["get", "level"]], "number"],
-            ["==", ["get", "level"], 0],
+            [
+              "==",
+              [
+                "typeof",
+                [
+                  "get",
+                  "level"
+                ]
+              ],
+              "number"
+            ],
+            [
+              "==",
+              [
+                "get",
+                "level"
+              ],
+              0
+            ],
             false
           ]
         ]
       ],
       "layout": {
-        "icon-image": ["concat", ["get", "class"], "_11"]
+        "icon-image": [
+          "concat",
+          [
+            "get",
+            "class"
+          ],
+          "_11"
+        ]
       }
     }
   ],
   "metadata": {
-    "smp:bounds": [-180, -85.051129, 180, 85.051129],
+    "smp:bounds": [
+      -180,
+      -85.051129,
+      180,
+      85.051129
+    ],
     "smp:maxzoom": 0,
     "smp:sourceFolders": {
       "openmaptiles": "0"
     }
   },
-  "center": [0, 0],
+  "center": [
+    0,
+    0
+  ],
   "zoom": 0
 }

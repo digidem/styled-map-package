@@ -1,12 +1,12 @@
 import archiver from 'archiver'
 import { temporaryWrite } from 'tempy'
+import { test } from 'vitest'
 import { fromBuffer } from 'yauzl-promise'
 
 import assert from 'node:assert/strict'
 import { randomBytes } from 'node:crypto'
 import { closeSync, openSync } from 'node:fs'
 import { buffer } from 'node:stream/consumers'
-import { test } from 'node:test'
 
 import { Reader } from '../lib/index.js'
 
