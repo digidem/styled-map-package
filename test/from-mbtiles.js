@@ -1,24 +1,24 @@
 import { MBTiles } from 'mbtiles-reader'
 import { temporaryFile } from 'tempy'
+import { onTestFinished, test } from 'vitest'
 
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { buffer } from 'node:stream/consumers'
 import { pipeline } from 'node:stream/promises'
-import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 import { fromMBTiles } from '../lib/from-mbtiles.js'
 import { Reader } from '../lib/reader.js'
 
-test('convert from MBTiles', async (t) => {
+test('convert from MBTiles', async () => {
   const fixture = fileURLToPath(
     new URL('./fixtures/plain_1.mbtiles', import.meta.url),
   )
   const output1 = temporaryFile()
   const output2 = temporaryFile()
 
-  t.after(() => {
+  onTestFinished(() => {
     fs.unlinkSync(output1)
     fs.unlinkSync(output2)
   })

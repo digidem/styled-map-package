@@ -1,6 +1,7 @@
 import SphericalMercator from '@mapbox/sphericalmercator'
 import { bbox as turfBbox } from '@turf/bbox'
 import randomStream from 'random-bytes-readable-stream'
+import { describe, test } from 'vitest'
 import { fromBuffer, fromBuffer as zipFromBuffer } from 'yauzl-promise'
 
 import assert from 'node:assert/strict'
@@ -9,7 +10,6 @@ import {
   buffer as streamToBuffer,
   json as streamToJson,
 } from 'node:stream/consumers'
-import { test } from 'node:test'
 
 import { Reader, Writer } from '../lib/index.js'
 import { tileIterator } from '../lib/tile-downloader.js'
@@ -28,11 +28,11 @@ async function readJson(filePath) {
 
 const updateSnapshots = !!process.env.UPDATE_SNAPSHOTS
 
-test('Invalid styles', async (t) => {
+describe('Invalid styles', async () => {
   const fixturesDir = new URL('./fixtures/invalid-styles/', import.meta.url)
   const fixtures = await fs.readdir(fixturesDir)
   for (const fixture of fixtures) {
-    await t.test(fixture, async () => {
+    test(fixture, async () => {
       const stylePath = new URL(fixture, fixturesDir)
       const style = await readJson(stylePath)
       await assert.rejects(
@@ -573,7 +573,7 @@ test('Raster tiles write and read', async () => {
   assert.equal(jpgTileHashOut, jpgTileHash, 'JPG tile is the same')
 })
 
-test.only('Optimized central directory order', async () => {
+test('Optimized central directory order', async () => {
   const styleInUrl = new URL(
     './fixtures/valid-styles/all-types.input.json',
     import.meta.url,
@@ -627,10 +627,12 @@ test.only('Optimized central directory order', async () => {
   const entries = await zip.readEntries()
   const entriesFilenames = entries.map((e) => e.filename)
 
-  // 1. style.json
-  // 2. glyphs for 0-255 UTF codes
-  // 3. sources ordered by zoom level
+  // 1. VERSION
+  // 2. style.json
+  // 3. glyphs for 0-255 UTF codes
+  // 4. sources ordered by zoom level
   const expectedFirstEntriesFilenames = [
+    'VERSION',
     'style.json',
     'fonts/font2/0-255.pbf.gz',
     'fonts/font1/0-255.pbf.gz',
