@@ -72,7 +72,7 @@ test('Reader.getVersion() returns version from SMP created by Writer', async () 
   await reader.close()
 })
 
-test('Reader.getVersion() returns null for SMP without VERSION file', async () => {
+test('Reader.getVersion() returns "1.0" for SMP without VERSION file', async () => {
   const archive = archiver('zip')
   archive.append(JSON.stringify({ version: 8, sources: {}, layers: [] }), {
     name: 'style.json',
@@ -82,7 +82,7 @@ test('Reader.getVersion() returns null for SMP without VERSION file', async () =
   const zip = await fromBuffer(zipBuffer)
   const reader = new Reader(zip)
   const version = await reader.getVersion()
-  assert.equal(version, null)
+  assert.equal(version, '1.0')
   await reader.close()
 })
 
