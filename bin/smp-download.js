@@ -2,7 +2,8 @@
 import { input, number } from '@inquirer/prompts'
 import { Command, InvalidArgumentError } from 'commander'
 import fs from 'fs'
-import { pipeline } from 'stream/promises'
+
+import { Writable } from 'node:stream'
 
 import { download } from '../dist/download.js'
 import { ttyReporter } from '../dist/reporters.js'
@@ -129,7 +130,7 @@ program
       accessToken: token,
     })
     const outputStream = output ? fs.createWriteStream(output) : process.stdout
-    await pipeline(readStream, outputStream)
+    await readStream.pipeTo(Writable.toWeb(outputStream))
   })
 
 program.parseAsync(process.argv)

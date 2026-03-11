@@ -1,16 +1,16 @@
-import { once } from 'node:events'
-
 import { replaceVariables } from '../../lib/utils/templates.js'
-import { DigestStream } from './digest-stream.js'
 
 /** @import { Reader } from '../../lib/index.js' */
+
 /**
  * A helper class for reading resources from a styled map package.
+ * Uses the Web Crypto API for hashing (works in both Node.js 18+ and browsers).
  */
 export class ReaderHelper {
   #reader
   /** @type {Awaited<ReturnType<Reader['getStyle']>> | undefined} */
   #style
+  #crypto = globalThis.crypto
   /** @param {Reader} reader */
   constructor(reader) {
     this.#reader = reader
@@ -19,10 +19,28 @@ export class ReaderHelper {
   /** @param {string} path */
   async #digest(path) {
     const resource = await this.#reader.getResource(path)
-    const digestStream = new DigestStream('md5')
-    resource.stream.pipe(digestStream).resume()
-    await once(digestStream, 'finish')
-    return digestStream.digest('hex')
+    const chunks = /** @type {Uint8Array[]} */ ([])
+    const reader = resource.stream.getReader()
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      chunks.push(value instanceof Uint8Array ? value : new Uint8Array(value))
+    }
+    const totalLen = chunks.reduce((s, c) => s + c.byteLength, 0)
+    const buf = new Uint8Array(totalLen)
+    let off = 0
+    for (const chunk of chunks) {
+      buf.set(chunk, off)
+      off += chunk.byteLength
+    }
+    if (!this.#crypto) {
+      // @ts-ignore
+      this.#crypto = (await import('crypto')).webcrypto
+    }
+    const hashBuf = await this.#crypto.subtle.digest('SHA-256', buf)
+    return Array.from(new Uint8Array(hashBuf))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')
   }
 
   /**

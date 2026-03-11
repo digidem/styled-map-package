@@ -1,4 +1,4 @@
-import { test } from 'vitest'
+import { onTestFinished, test } from 'vitest'
 
 import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
@@ -13,6 +13,7 @@ test('server basic', async () => {
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
   )
   const reader = new Reader(filepath)
+  onTestFinished(() => reader.close())
   const server = createServer()
   const response = await server.fetch(
     new Request('http://example.com/style.json'),
@@ -79,6 +80,7 @@ test('server 404', async () => {
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
   )
   const reader = new Reader(filepath)
+  onTestFinished(() => reader.close())
   const server = createServer()
   {
     const responsePromise = server.fetch(
@@ -107,6 +109,7 @@ test('server with base path', async () => {
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
   )
   const reader = new Reader(filepath)
+  onTestFinished(() => reader.close())
   const server = createServer({ base: '/maps/my-map/' })
   const response = await server.fetch(
     new Request('http://example.com/maps/my-map/style.json'),
@@ -122,6 +125,7 @@ test('server with parameter in base path', async () => {
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),
   )
   const reader = new Reader(filepath)
+  onTestFinished(() => reader.close())
   const server = createServer({ base: '/maps/:mapId/' })
   const response = await server.fetch(
     new Request('http://example.com/maps/45b4fcabc49c/style.json'),
