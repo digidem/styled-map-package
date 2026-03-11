@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
-import { pipeline } from 'stream/promises'
+
+import fs from 'node:fs'
+import { Writable } from 'node:stream'
 
 import { fromMBTiles } from '../dist/from-mbtiles.js'
 
@@ -11,11 +13,8 @@ program
   .option('-o, --output <file>', 'output smp file')
   .argument('<mbtiles>', 'MBTiles file to convert')
   .action(async (mbtilesPath, { output }) => {
-    if (output) {
-      await fromMBTiles(mbtilesPath, output)
-    } else {
-      await pipeline(fromMBTiles(mbtilesPath), process.stdout)
-    }
+    const dest = output ? fs.createWriteStream(output) : process.stdout
+    await fromMBTiles(mbtilesPath).pipeTo(Writable.toWeb(dest))
   })
 
 program.parseAsync(process.argv)

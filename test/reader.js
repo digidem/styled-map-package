@@ -1,15 +1,43 @@
-import archiver from 'archiver'
-import randomStream from 'random-bytes-readable-stream'
+import { ZipReader } from '@gmaclennan/zip-reader'
+import { BufferSource } from '@gmaclennan/zip-reader/buffer-source'
 import { temporaryWrite } from 'tempy'
 import { test } from 'vitest'
-import { fromBuffer } from 'yauzl-promise'
+import { ZipWriter } from 'zip-writer'
 
 import assert from 'node:assert/strict'
 import { randomBytes } from 'node:crypto'
 import { closeSync, openSync } from 'node:fs'
-import { buffer, buffer as streamToBuffer } from 'node:stream/consumers'
 
 import { Reader, Writer } from '../lib/index.js'
+import { streamToBuffer } from './utils/stream-consumers.js'
+
+const enc = new TextEncoder()
+
+/**
+ * Create a zip buffer with given entries using zip-writer.
+ * @param {Array<{ name: string, data: string | Uint8Array }>} entries
+ * @returns {Promise<Uint8Array>}
+ */
+async function createZipBuffer(entries) {
+  const zw = new ZipWriter()
+  const outputPromise = streamToBuffer(
+    /** @type {ReadableStream<Uint8Array>} */ (zw.readable),
+  )
+  for (const { name, data } of entries) {
+    const bytes = typeof data === 'string' ? enc.encode(data) : data
+    await zw.addEntry({
+      readable: new ReadableStream({
+        start(controller) {
+          controller.enqueue(bytes)
+          controller.close()
+        },
+      }),
+      name,
+    })
+  }
+  await zw.finalize()
+  return outputPromise
+}
 
 test('Reader, invalid filepath', async () => {
   const expectedError = { code: 'ENOENT' }
@@ -56,16 +84,25 @@ test('Reader.getVersion() returns version from SMP created by Writer', async () 
     layers: [{ id: 'bg', type: 'background' }],
   }
   const writer = new Writer(style)
-  await writer.addTile(randomStream({ size: 1024 }), {
-    x: 0,
-    y: 0,
-    z: 0,
-    sourceId: 'test',
-    format: 'mvt',
-  })
+  const smpBufPromise = streamToBuffer(writer.outputStream)
+  await writer.addTile(
+    new ReadableStream({
+      start(c) {
+        c.enqueue(new Uint8Array(1024))
+        c.close()
+      },
+    }),
+    {
+      x: 0,
+      y: 0,
+      z: 0,
+      sourceId: 'test',
+      format: 'mvt',
+    },
+  )
   writer.finish()
-  const smpBuf = await streamToBuffer(writer.outputStream)
-  const zip = await fromBuffer(smpBuf)
+  const smpBuf = await smpBufPromise
+  const zip = await ZipReader.from(new BufferSource(smpBuf))
   const reader = new Reader(zip)
   const version = await reader.getVersion()
   assert.equal(version, '1.0')
@@ -73,13 +110,13 @@ test('Reader.getVersion() returns version from SMP created by Writer', async () 
 })
 
 test('Reader.getVersion() returns "1.0" for SMP without VERSION file', async () => {
-  const archive = archiver('zip')
-  archive.append(JSON.stringify({ version: 8, sources: {}, layers: [] }), {
-    name: 'style.json',
-  })
-  archive.finalize()
-  const zipBuffer = await buffer(archive)
-  const zip = await fromBuffer(zipBuffer)
+  const zipBuffer = await createZipBuffer([
+    {
+      name: 'style.json',
+      data: JSON.stringify({ version: 8, sources: {}, layers: [] }),
+    },
+  ])
+  const zip = await ZipReader.from(new BufferSource(zipBuffer))
   const reader = new Reader(zip)
   const version = await reader.getVersion()
   assert.equal(version, '1.0')
@@ -87,14 +124,18 @@ test('Reader.getVersion() returns "1.0" for SMP without VERSION file', async () 
 })
 
 test('Reader, invalid smp file', async () => {
-  const archive = archiver('zip')
-  archive.append('string cheese!', { name: 'file2.txt' })
-  archive.finalize()
-  const zipBuffer = await buffer(archive)
-  const zip = await fromBuffer(zipBuffer)
-  // check zip file is valid
-  const entries = await zip.readEntries()
-  assert(entries.find((entry) => entry.filename === 'file2.txt'))
+  const zipBuffer = await createZipBuffer([
+    { name: 'file2.txt', data: 'string cheese!' },
+  ])
+  // check zip file is valid and contains the expected entry
+  const zipReader = await ZipReader.from(new BufferSource(zipBuffer))
+  const entries = []
+  for await (const entry of zipReader) {
+    entries.push(entry)
+  }
+  assert(entries.find((entry) => entry.name === 'file2.txt'))
+  // now test Reader with a fresh ZipReader over the same buffer
+  const zip = await ZipReader.from(new BufferSource(zipBuffer))
   const expectedError = { code: 'ENOENT' }
   const reader = new Reader(zip)
   await assert.rejects(reader.getStyle(), expectedError)

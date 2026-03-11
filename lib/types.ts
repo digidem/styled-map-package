@@ -8,7 +8,6 @@ import type {
   RasterDEMSourceSpecification,
 } from '@maplibre/maplibre-gl-style-spec'
 import type { GeoJSON, BBox } from 'geojson'
-import type { Readable } from 'stream'
 import type { Except, SetRequired, Simplify } from 'type-fest'
 
 import { SUPPORTED_SOURCE_TYPES } from './writer.js'
@@ -77,12 +76,7 @@ export interface ValidateStyle {
   errors: Array<ValidationError>
 }
 
-export interface DownloadStream extends Readable {
-  iterator(
-    ...args: Parameters<Readable['iterator']>
-  ): AsyncIterableIterator<Buffer>
-  [Symbol.asyncIterator](): AsyncIterableIterator<Buffer>
-}
+export type DownloadStream = ReadableStream<Uint8Array>
 
 export type RequiredUnion<T> = T extends any ? Required<T> : never
 export type OmitUnion<T, K extends keyof any> = T extends unknown

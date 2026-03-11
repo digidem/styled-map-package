@@ -1,5 +1,3 @@
-import assert from 'node:assert/strict'
-
 const PRECISION = 1e-6
 
 /**
@@ -9,11 +7,14 @@ const PRECISION = 1e-6
  * @param {string} msg
  */
 export function assertBboxEqual(actual, expected, msg) {
-  assert.equal(actual.length, expected.length, `${msg}: length`)
+  if (actual.length !== expected.length) {
+    throw new Error(`${msg}: length`)
+  }
   for (let i = 0; i < actual.length; i++) {
-    assert(
-      Math.abs(actual[i] - expected[i]) < PRECISION,
-      `${msg}:\n    ${actual[i]} - ${expected[i]} > ${PRECISION}`,
-    )
+    if (!(Math.abs(actual[i] - expected[i]) < PRECISION)) {
+      throw new Error(
+        `${msg}:\n    ${actual[i]} - ${expected[i]} > ${PRECISION}`,
+      )
+    }
   }
 }
