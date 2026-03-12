@@ -12,8 +12,8 @@ if (process.platform === 'darwin') {
   browserInstances.push({ browser: 'webkit' })
 }
 
-if (process.platform !== 'win32') {
-  // Firefox tests keep timing out on Windows CI runners due to
+if (process.platform !== 'win32' && !process.env.CI) {
+  // Firefox is excluded from CI due to flaky Playwright session timeouts
   // https://github.com/microsoft/playwright/issues/34586
   browserInstances.push({ browser: 'firefox' })
 }
