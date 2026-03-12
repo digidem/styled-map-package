@@ -106,6 +106,7 @@
     "lint": "eslint .",
     "types": "tsc",
     "build": "tsup",
+    "bench": "vitest bench --project node",
     "prepack": "npm run build"
   },
   "keywords": [],

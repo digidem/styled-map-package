@@ -34,7 +34,7 @@ export default defineConfig({
           pool: 'forks',
           environment: 'node',
           include: ['test/**/*.js'],
-          exclude: nonTestFiles,
+          exclude: [...nonTestFiles, 'test/*.bench.js'],
         },
       },
       {
