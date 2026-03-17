@@ -1,0 +1,11 @@
+{
+  "mode": "pre",
+  "tag": "pre",
+  "initialVersions": {
+    "styled-map-package-api": "4.1.0",
+    "styled-map-package": "4.1.0"
+  },
+  "changesets": [
+    "monorepo-refactor"
+  ]
+}

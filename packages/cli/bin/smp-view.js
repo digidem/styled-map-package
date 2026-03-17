@@ -5,11 +5,10 @@ import fsPromises from 'fs/promises'
 import http from 'http'
 import { AutoRouter } from 'itty-router'
 import openApp from 'open'
+import { Reader } from 'styled-map-package-api/reader'
+import { createServer } from 'styled-map-package-api/server'
 
 import path from 'node:path'
-
-import { Reader } from '../dist/reader.js'
-import { createServer } from '../dist/server.js'
 
 const program = new Command()
 

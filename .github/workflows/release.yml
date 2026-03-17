@@ -1,42 +1,44 @@
-name: release
+name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      semver:
-        description: 'The semver to use'
-        required: true
-        default: 'auto'
-        type: choice
-        options:
-          - auto
-          - patch
-          - minor
-          - major
-          - prerelease
-          # - prepatch
-          # - preminor
-          # - premajor
-  pull_request:
-    types: [closed]
+  push:
     branches: [main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      issues: write
       pull-requests: write
       id-token: write
     steps:
-      - uses: nearform-actions/optic-release-automation-action@a2785548e8bdafab7e628c2317b604278e460434 # v4.12.2
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
         with:
-          commit-message: 'Release {version}'
-          sync-semver-tags: true
-          access: 'public'
-          semver: ${{ github.event.inputs.semver }}
-          notify-linked-issues: false
-          publish-mode: oidc
-          build-command: |
-            npm ci
+          node-version: 22
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build packages
+        run: npm run build --workspaces --if-present
+
+      - name: Create release PR or publish
+        uses: changesets/action@6a0a831ff30acef54f2c6aa1cbbc1096b066edaf # v1.7.0
+        with:
+          publish: npm run release
+          title: 'Version Packages'
+          commit: 'Version Packages'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true
