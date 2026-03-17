@@ -1,6 +1,6 @@
 {
   "name": "styled-map-package",
-  "version": "4.1.0",
+  "version": "5.0.0-pre.0",
   "description": "CLI for creating, viewing, and converting Styled Map Package (.smp) files",
   "type": "module",
   "bin": {
@@ -18,7 +18,7 @@
   "keywords": [],
   "license": "MIT",
   "dependencies": {
-    "styled-map-package-api": "^4.1.0",
+    "styled-map-package-api": "^5.0.0-pre.0",
     "@inquirer/prompts": "^6.0.1",
     "@whatwg-node/server": "^0.10.17",
     "chalk": "^5.4.1",
