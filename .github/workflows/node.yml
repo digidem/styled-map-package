@@ -25,23 +25,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Check for changesets
+      - name: Check for accidental versioning
         run: |
-          if [ -f .changeset/pre.json ]; then
-            # In pre-release mode, `changeset status --since` incorrectly
-            # filters out changesets tracked in pre.json as "consumed".
-            # Fall back to checking git diff for new changeset files.
-            # https://github.com/changesets/changesets/issues/719
-            NEW_CHANGESETS=$(git diff --name-only --diff-filter=d origin/main...HEAD -- '.changeset/*.md' ':^.changeset/README.md')
-            if [ -z "$NEW_CHANGESETS" ]; then
-              echo "::error::No new changeset files found. Run 'npx changeset' to add one."
-              exit 1
-            fi
-            echo "Found new changeset(s) (pre-release mode):"
-            echo "$NEW_CHANGESETS"
-          else
-            npx changeset status --since=origin/main
+          CHANGELOG_CHANGES=$(git diff --name-only origin/main...HEAD -- '**/CHANGELOG.md')
+          if [ -n "$CHANGELOG_CHANGES" ]; then
+            echo "::error::CHANGELOG.md files were modified. Do not run 'npx changeset version' on feature branches — version bumping is handled automatically by the Version Packages PR."
+            exit 1
           fi
+
+      - name: Check for changesets
+        run: npx changeset status --since=origin/main
 
   test:
     strategy:

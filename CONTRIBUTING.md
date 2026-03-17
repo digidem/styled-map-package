@@ -67,12 +67,15 @@ npx changeset pre exit
 
 While in pre-release mode, the normal changeset workflow still applies — add changesets to PRs, merge, and the "Version Packages" PR will bump the pre-release number.
 
+### Important: don't version on feature branches
+
+Never run `npx changeset version` on a feature branch. This bumps versions and creates CHANGELOGs, which makes the Release workflow think it should publish immediately when the branch merges. Version bumping is handled automatically by the "Version Packages" PR.
+
 ### Publishing a release manually
 
 Normally releases are fully automated. If you need to publish manually:
 
 ```sh
-npm run build
 npx changeset version   # bump versions and update changelogs
 npm run release          # build + publish all packages
 ```
