@@ -1,5 +1,14 @@
 # styled-map-package
 
+## 5.0.0-pre.1
+
+### Patch Changes
+
+- [#75](https://github.com/digidem/styled-map-package/pull/75) [`14cf062`](https://github.com/digidem/styled-map-package/commit/14cf06279b934b6e8619e4772e21470ca9cc4d54) Thanks [@gmaclennan](https://github.com/gmaclennan)! - Add package READMEs
+
+- Updated dependencies [[`14cf062`](https://github.com/digidem/styled-map-package/commit/14cf06279b934b6e8619e4772e21470ca9cc4d54)]:
+  - styled-map-package-api@5.0.0-pre.1
+
 ## 5.0.0-pre.0
 
 ### Major Changes

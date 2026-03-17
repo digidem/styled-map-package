@@ -6,6 +6,8 @@
     "styled-map-package": "4.1.0"
   },
   "changesets": [
-    "monorepo-refactor"
+    "monorepo-refactor",
+    "olive-toes-sniff",
+    "upset-candies-send"
   ]
 }
