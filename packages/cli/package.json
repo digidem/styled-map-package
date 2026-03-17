@@ -13,7 +13,7 @@
     "map-viewer"
   ],
   "scripts": {
-    "test": "echo 'No CLI tests yet'"
+    "test": "vitest run"
   },
   "keywords": [],
   "license": "MIT",
@@ -30,6 +30,11 @@
     "pretty-bytes": "^6.1.1",
     "pretty-ms": "^9.2.0",
     "readable-stream": "^4.7.0"
+  },
+  "devDependencies": {
+    "execa": "^9.4.0",
+    "tempy": "^3.1.0",
+    "vitest": "^3.2.4"
   },
   "repository": {
     "type": "git",
