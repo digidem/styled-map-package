@@ -1,0 +1,39 @@
+{
+  "name": "styled-map-package",
+  "version": "5.0.0-pre.0",
+  "description": "CLI for creating, viewing, and converting Styled Map Package (.smp) files",
+  "type": "module",
+  "bin": {
+    "styled-map-package": "bin/smp.js",
+    "smp": "bin/smp.js"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "map-viewer"
+  ],
+  "scripts": {
+    "test": "echo 'No CLI tests yet'"
+  },
+  "keywords": [],
+  "license": "MIT",
+  "dependencies": {
+    "styled-map-package-api": "^5.0.0-pre.0",
+    "@inquirer/prompts": "^6.0.1",
+    "@whatwg-node/server": "^0.10.17",
+    "chalk": "^5.4.1",
+    "commander": "^12.1.0",
+    "itty-router": "^5.0.22",
+    "log-symbols": "^7.0.0",
+    "open": "^10.1.0",
+    "ora": "^8.2.0",
+    "pretty-bytes": "^6.1.1",
+    "pretty-ms": "^9.2.0",
+    "readable-stream": "^4.7.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/digidem/styled-map-package.git",
+    "directory": "packages/cli"
+  }
+}

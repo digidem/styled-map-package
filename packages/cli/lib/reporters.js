@@ -24,7 +24,7 @@ const TASK_LABEL = /** @type {const} */ ({
 })
 
 const TASK_SUFFIX =
-  /** @type {{ [K in (typeof TASKS)[number]]: (progress: import('./download.js').DownloadProgress[K]) => string }} */ ({
+  /** @type {{ [K in (typeof TASKS)[number]]: (progress: import('styled-map-package-api/download').DownloadProgress[K]) => string }} */ ({
     style: () => '',
     sprites: ({ downloaded }) => `${downloaded}`,
     tiles: ({ total, skipped, totalBytes, downloaded }) => {
@@ -45,7 +45,7 @@ const TASK_SUFFIX =
  * the terminal.
  */
 export function ttyReporter() {
-  /** @type {import('./download.js').DownloadProgress | undefined} */
+  /** @type {import('styled-map-package-api/download').DownloadProgress | undefined} */
   let stats
   let current = 0
   /** @type {import('ora').Ora} */
@@ -58,7 +58,7 @@ export function ttyReporter() {
       spinner = ora(TASK_LABEL[TASKS[current]]).start()
       cb()
     },
-    /** @param {ArrayLike<{ chunk: import('./download.js').DownloadProgress, encoding: string }>} chunks */
+    /** @param {ArrayLike<{ chunk: import('styled-map-package-api/download').DownloadProgress, encoding: string }>} chunks */
     writev(chunks, cb) {
       stats = chunks[chunks.length - 1].chunk
       while (current < TASKS.length && stats[TASKS[current]].done) {

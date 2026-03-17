@@ -4,7 +4,7 @@ import globals from 'globals'
 
 /** @type {import('eslint').Linter.Config[]} */
 export default [
-  globalIgnores(['./dist']),
+  globalIgnores(['**/dist']),
   js.configs.recommended,
   {
     languageOptions: {
@@ -19,7 +19,7 @@ export default [
     // Publishing code that uses default exports can affect usage of the published module.
     // See https://github.com/digidem/styled-map-package/pull/45 for more context.
     name: 'no default exports in source',
-    files: ['lib/**/*.js'],
+    files: ['packages/api/lib/**/*.js'],
     rules: {
       'no-restricted-exports': [
         'error',

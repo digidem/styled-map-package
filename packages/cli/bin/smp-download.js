@@ -2,12 +2,15 @@
 import { input, number } from '@inquirer/prompts'
 import { Command, InvalidArgumentError } from 'commander'
 import fs from 'fs'
+import { download } from 'styled-map-package-api/download'
+import {
+  isMapboxURL,
+  API_URL as MAPBOX_API_URL,
+} from 'styled-map-package-api/utils/mapbox'
 
 import { Writable } from 'node:stream'
 
-import { download } from '../dist/download.js'
-import { ttyReporter } from '../dist/reporters.js'
-import { isMapboxURL, API_URL as MAPBOX_API_URL } from '../dist/utils/mapbox.js'
+import { ttyReporter } from '../lib/reporters.js'
 
 const program = new Command()
 

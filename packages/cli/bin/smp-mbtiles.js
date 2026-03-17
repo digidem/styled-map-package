@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
+import { fromMBTiles } from 'styled-map-package-api/from-mbtiles'
 
 import fs from 'node:fs'
 import { Writable } from 'node:stream'
-
-import { fromMBTiles } from '../dist/from-mbtiles.js'
 
 const program = new Command()
 

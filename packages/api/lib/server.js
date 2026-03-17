@@ -49,8 +49,8 @@ function json(obj) {
  * import { createServer } from 'node:http'
  * import { error } from 'itty-router/error'
  * import { createServerAdapter } from '@whatwg-node/server'
- * import { createServer as createSMPServer } from 'styled-map-package/server'
- * import { Reader } from 'styled-map-package/reader'
+ * import { createServer as createSMPServer } from 'styled-map-package-api/server'
+ * import { Reader } from 'styled-map-package-api/reader'
  *
  * const reader = new Reader('path/to/your-style.smp')
  * const smpServer = createSMPServer()
