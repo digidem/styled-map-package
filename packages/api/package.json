@@ -1,6 +1,6 @@
 {
   "name": "styled-map-package-api",
-  "version": "4.1.0",
+  "version": "5.0.0-pre.0",
   "description": "JavaScript API for reading, writing, and serving Styled Map Package (.smp) files",
   "type": "module",
   "main": "./dist/index.cjs",
