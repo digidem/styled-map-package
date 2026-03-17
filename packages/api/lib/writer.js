@@ -1,6 +1,5 @@
 import { validateStyleMin, migrate } from '@maplibre/maplibre-gl-style-spec'
 import { bbox } from '@turf/bbox'
-import { EventEmitter } from 'events'
 import { excludeKeys } from 'filter-obj'
 import { ZipWriter } from 'zip-writer'
 
@@ -61,7 +60,7 @@ export const SUPPORTED_SOURCE_TYPES = /** @type {const} */ ([
  * `witer.finish()` and then wait for your writable stream to `finish` before
  * using the output.
  */
-export class Writer extends EventEmitter {
+export class Writer {
   #zipWriter = new ZipWriter()
   /** @type {Set<string>} */
   #addedFiles = new Set()
@@ -86,7 +85,6 @@ export class Writer extends EventEmitter {
    * this is typed as `any` and validated internally)
    */
   constructor(style) {
-    super()
     if (!style || !('version' in style)) {
       throw new Error('Invalid style')
     }
