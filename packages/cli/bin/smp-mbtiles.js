@@ -5,6 +5,8 @@ import { fromMBTiles } from 'styled-map-package-api/from-mbtiles'
 import fs from 'node:fs'
 import { Writable } from 'node:stream'
 
+import { runMbtiles } from '../lib/commands/mbtiles.js'
+
 const program = new Command()
 
 program
@@ -12,8 +14,13 @@ program
   .option('-o, --output <file>', 'output smp file')
   .argument('<mbtiles>', 'MBTiles file to convert')
   .action(async (mbtilesPath, { output }) => {
-    const dest = output ? fs.createWriteStream(output) : process.stdout
-    await fromMBTiles(mbtilesPath).pipeTo(Writable.toWeb(dest))
+    await runMbtiles({ mbtilesPath, output }, {
+      fromMBTiles,
+      createOutputStream: (output) =>
+        output
+          ? Writable.toWeb(fs.createWriteStream(output))
+          : Writable.toWeb(process.stdout),
+    })
   })
 
 program.parseAsync(process.argv)
