@@ -50,11 +50,14 @@ async function verifySmp(smpBuffer, mbtiles) {
   const style = await reader.getStyle('')
   const sourceMetadata = Object.values(style.sources)[0]
   expect(sourceMetadata.type).toBe('raster')
+  const tileUrl = /** @type {string[]} */ (
+    /** @type {any} */ (sourceMetadata).tiles
+  )[0]
 
   let tileCount = 0
   for (const { x, y, z, data } of mbtiles) {
     tileCount++
-    const path = replaceVariables(sourceMetadata.tiles[0], { x, y, z })
+    const path = replaceVariables(tileUrl, { x, y, z })
     const smpTile = await reader.getResource(path)
     const tileData = await streamToBuffer(smpTile.stream)
     expect(tileData).toEqual(data)

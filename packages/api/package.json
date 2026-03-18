@@ -130,6 +130,9 @@
     "yocto-queue": "^1.1.1",
     "zip-writer": "^2.2.0"
   },
+  "optionalDependencies": {
+    "better-sqlite3": "^12.8.0"
+  },
   "devDependencies": {
     "@commander-js/extra-typings": "^12.1.0",
     "@types/geojson": "^7946.0.16",

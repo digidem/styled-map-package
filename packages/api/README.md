@@ -61,7 +61,12 @@ const stream = download({
 ```js
 import { fromMBTiles } from 'styled-map-package-api/from-mbtiles'
 
+// From a file path (Node.js)
 const stream = fromMBTiles('path/to/tiles.mbtiles')
+
+// From an ArrayBuffer or Uint8Array (Node.js and browsers)
+const stream = fromMBTiles(buffer)
+
 // Pipe the ReadableStream to an .smp file
 ```
 
