@@ -78,6 +78,36 @@ test('convert from MBTiles with buffer', { timeout: 30_000 }, async () => {
   mbtiles.close()
 })
 
+test('style has correct source and root properties', async () => {
+  const fixtureBuffer = await getFixtureBuffer()
+  const smpBuffer = await streamToBuffer(
+    fromMBTiles(new Uint8Array(fixtureBuffer)),
+  )
+  const reader = new Reader(await ZipReader.from(new BufferSource(smpBuffer)))
+  const style = await reader.getStyle('')
+  const source = Object.values(style.sources)[0]
+
+  // tileSize must be 256 (MBTiles standard tile size, not MapLibre default of 512)
+  expect(source).toHaveProperty('tileSize', 256)
+
+  // Valid source properties should be present
+  expect(source).toHaveProperty('type', 'raster')
+  expect(source).toHaveProperty('minzoom', 0)
+  expect(source).toHaveProperty('maxzoom', 4)
+  expect(source).toHaveProperty('scheme', 'xyz')
+
+  // Non-source properties from MBTiles metadata should not leak into the source
+  expect(source).not.toHaveProperty('name')
+  expect(source).not.toHaveProperty('format')
+  expect(source).not.toHaveProperty('description')
+  expect(source).not.toHaveProperty('version')
+  expect(source).not.toHaveProperty('center')
+
+  // MBTiles description and version are preserved in style.metadata
+  expect(style.metadata['mbtiles:description']).toBe('demo description')
+  expect(style.metadata['mbtiles:version']).toBe('1.0.3')
+})
+
 test('parallel conversions from same buffer', { timeout: 30_000 }, async () => {
   const fixtureBuffer = await getFixtureBuffer()
 

@@ -65,6 +65,7 @@ type TransformSMPStyle<T extends StyleSpecification> = Omit<T, 'sources'> & {
     'smp:bounds': [number, number, number, number]
     'smp:maxzoom': 0
     'smp:sourceFolders': { [_: string]: string }
+    [key: string]: unknown
   }
   sources: {
     [_: string]: SMPSource
