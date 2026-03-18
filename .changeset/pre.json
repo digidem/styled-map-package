@@ -6,6 +6,10 @@
     "styled-map-package": "4.1.0"
   },
   "changesets": [
-    "monorepo-refactor"
+    "kind-hotels-arrive",
+    "monorepo-refactor",
+    "olive-toes-sniff",
+    "upset-candies-send",
+    "wise-lizards-train"
   ]
 }
