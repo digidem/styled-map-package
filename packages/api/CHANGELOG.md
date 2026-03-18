@@ -1,5 +1,13 @@
 # styled-map-package-api
 
+## 5.0.0-pre.1
+
+### Patch Changes
+
+- [#75](https://github.com/digidem/styled-map-package/pull/75) [`14cf062`](https://github.com/digidem/styled-map-package/commit/14cf06279b934b6e8619e4772e21470ca9cc4d54) Thanks [@gmaclennan](https://github.com/gmaclennan)! - Add package READMEs
+
+- [#79](https://github.com/digidem/styled-map-package/pull/79) [`5f23127`](https://github.com/digidem/styled-map-package/commit/5f23127b496791d79d195507f2142c4d6c7fc2b6) Thanks [@gmaclennan](https://github.com/gmaclennan)! - fix: Writer should not extend node EventEmitter
+
 ## 5.0.0-pre.0
 
 ### Major Changes
