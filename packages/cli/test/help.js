@@ -1,7 +1,8 @@
+import { describe, expect, test } from 'vitest'
+
 import { execFile } from 'node:child_process'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { describe, expect, test } from 'vitest'
 
 const execFileAsync = promisify(execFile)
 const BIN_DIR = path.resolve(import.meta.dirname, '../bin')
@@ -31,13 +32,17 @@ describe('help output', () => {
     expect(stdout).toMatchSnapshot()
   })
 
-  test('smp mbtiles --help', async () => {
-    const { stdout } = await execFileAsync('node', [
-      path.join(BIN_DIR, 'smp-mbtiles.js'),
-      '--help',
-    ])
-    expect(stdout).toMatchSnapshot()
-  })
+  // mbtiles-reader requires better-sqlite3 which needs Node >= 20
+  test.skipIf(parseInt(process.versions.node) < 20)(
+    'smp mbtiles --help',
+    async () => {
+      const { stdout } = await execFileAsync('node', [
+        path.join(BIN_DIR, 'smp-mbtiles.js'),
+        '--help',
+      ])
+      expect(stdout).toMatchSnapshot()
+    },
+  )
 })
 
 describe('error output', () => {
