@@ -1,7 +1,7 @@
+import { MBTiles } from 'mbtiles-reader'
+
 import { readableFromAsync } from './utils/streams.js'
 import { Writer } from './writer.js'
-
-/** @typedef {import('mbtiles-reader').MBTiles} MBTiles */
 
 const SOURCE_ID = 'mbtiles-source'
 
@@ -25,9 +25,6 @@ export function fromMBTiles(source) {
 
   return new ReadableStream({
     async start() {
-      // Dynamic import so the module loads on Node 18 (where better-sqlite3
-      // is unavailable). The error surfaces here instead of at import time.
-      const { MBTiles } = await import('mbtiles-reader')
       const reader = await MBTiles.open(source)
       if (reader.metadata.format === 'pbf') {
         throw new Error('Vector MBTiles are not yet supported')

@@ -8,7 +8,8 @@ import assert from 'node:assert/strict'
 import { randomBytes } from 'node:crypto'
 import { closeSync, openSync } from 'node:fs'
 
-import { Reader, Writer } from '../lib/index.js'
+import { Reader } from '../lib/reader.js'
+import { Writer } from '../lib/writer.js'
 import { streamToBuffer } from './utils/stream-consumers.js'
 
 const enc = new TextEncoder()
