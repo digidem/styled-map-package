@@ -6,6 +6,7 @@
     "styled-map-package": "4.1.0"
   },
   "changesets": [
+    "all-peas-unite",
     "famous-bags-teach",
     "fast-eels-attack",
     "kind-hotels-arrive",

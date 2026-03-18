@@ -1,5 +1,12 @@
 # styled-map-package
 
+## 5.0.0-pre.3
+
+### Patch Changes
+
+- Updated dependencies [[`d30d241`](https://github.com/digidem/styled-map-package/commit/d30d241e301a985c0f74ef36d8129fa097008445)]:
+  - styled-map-package-api@5.0.0-pre.3
+
 ## 5.0.0-pre.2
 
 ### Patch Changes

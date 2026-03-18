@@ -1,5 +1,11 @@
 # styled-map-package-api
 
+## 5.0.0-pre.3
+
+### Patch Changes
+
+- [#87](https://github.com/digidem/styled-map-package/pull/87) [`d30d241`](https://github.com/digidem/styled-map-package/commit/d30d241e301a985c0f74ef36d8129fa097008445) Thanks [@gmaclennan](https://github.com/gmaclennan)! - Fix: Add missing tileSize for mbtiles imports and fix invalid source properties from mbtiles metadata
+
 ## 5.0.0-pre.2
 
 ### Patch Changes
