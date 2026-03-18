@@ -51,6 +51,8 @@ smp view demotiles.smp --open
 
 ### `smp mbtiles`
 
+> **Note:** Requires Node >= 20 (uses `better-sqlite3` which dropped Node 18 support).
+
 Convert an MBTiles file to a `.smp` file.
 
 ```sh

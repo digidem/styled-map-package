@@ -58,6 +58,8 @@ const stream = download({
 
 ### Converting from MBTiles
 
+> **Note:** MBTiles conversion requires Node >= 20 (uses `better-sqlite3` which dropped Node 18 support).
+
 ```js
 import { fromMBTiles } from 'styled-map-package-api/from-mbtiles'
 

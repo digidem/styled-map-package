@@ -1,7 +1,7 @@
-import { MBTiles } from 'mbtiles-reader'
-
 import { readableFromAsync } from './utils/streams.js'
 import { Writer } from './writer.js'
+
+/** @typedef {import('mbtiles-reader').MBTiles} MBTiles */
 
 const SOURCE_ID = 'mbtiles-source'
 
@@ -9,6 +9,8 @@ const SOURCE_ID = 'mbtiles-source'
  * Convert a MBTiles file to a styled map package, returned as a web
  * ReadableStream. The async MBTiles.open() happens lazily inside the
  * stream's start(), so this function is synchronous.
+ *
+ * Requires Node >= 20 (uses better-sqlite3 which dropped Node 18 support).
  *
  * @param {string | ArrayBuffer | Uint8Array} source MBTiles source — file path
  *   (Node), OPFS path (browser Worker), or in-memory buffer.
@@ -23,6 +25,9 @@ export function fromMBTiles(source) {
 
   return new ReadableStream({
     async start() {
+      // Dynamic import so the module loads on Node 18 (where better-sqlite3
+      // is unavailable). The error surfaces here instead of at import time.
+      const { MBTiles } = await import('mbtiles-reader')
       const reader = await MBTiles.open(source)
       if (reader.metadata.format === 'pbf') {
         throw new Error('Vector MBTiles are not yet supported')

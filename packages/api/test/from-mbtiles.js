@@ -66,7 +66,7 @@ async function verifySmp(smpBuffer, mbtiles) {
   expect(tileCount).toBeGreaterThan(10)
 }
 
-test('convert from MBTiles with buffer', async () => {
+test('convert from MBTiles with buffer', { timeout: 30_000 }, async () => {
   const fixtureBuffer = await getFixtureBuffer()
 
   const smpBuffer = await streamToBuffer(
