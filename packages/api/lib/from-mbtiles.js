@@ -1,5 +1,6 @@
 import { MBTiles } from 'mbtiles-reader'
 
+import { noop } from './utils/misc.js'
 import { readableFromAsync } from './utils/streams.js'
 import { Writer } from './writer.js'
 
@@ -29,13 +30,27 @@ export function fromMBTiles(source) {
       if (reader.metadata.format === 'pbf') {
         throw new Error('Vector MBTiles are not yet supported')
       }
+      const {
+        name,
+        minzoom,
+        maxzoom,
+        scheme,
+        attribution,
+        description,
+        version: tilesetVersion,
+      } = reader.metadata
+      /** @type {import('@maplibre/maplibre-gl-style-spec').StyleSpecification} */
       const style = {
         version: 8,
-        name: reader.metadata.name,
+        name,
         sources: {
           [SOURCE_ID]: {
-            ...reader.metadata,
             type: 'raster',
+            tileSize: 256,
+            minzoom,
+            maxzoom,
+            scheme,
+            attribution,
           },
         },
         layers: [
@@ -55,6 +70,13 @@ export function fromMBTiles(source) {
             },
           },
         ],
+      }
+
+      if (description || tilesetVersion) {
+        style.metadata = {
+          'mbtiles:description': description,
+          'mbtiles:version': tilesetVersion,
+        }
       }
 
       const writer = new Writer(style)
@@ -94,7 +116,7 @@ export function fromMBTiles(source) {
         outputReader
       )
         .cancel(reason)
-        .catch(() => {})
+        .catch(noop)
     },
   })
 }
