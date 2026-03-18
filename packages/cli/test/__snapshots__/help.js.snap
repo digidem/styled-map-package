@@ -1,0 +1,64 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`help output > smp --help 1`] = `
+"Usage: smp [options] [command]
+
+Options:
+  -h, --help      display help for command
+
+Commands:
+  download        Download a map style to a styled map package file
+  view            Preview a styled map package in a web browser
+  mbtiles         Convert a MBTiles file to a styled map package file
+  help [command]  display help for command
+"
+`;
+
+exports[`help output > smp download --help 1`] = `
+"Usage: smp-download [options] [styleUrl]
+
+Download a map style for offline usage
+
+Arguments:
+  styleUrl                            URL to style to download
+
+Options:
+  -o, --output <file>                 output file (if omitted, writes to
+                                      stdout)
+  -b, --bbox <west,south,east,north>  bounding box of area to download e.g.
+                                      11,47,12,47.5
+  -z, --zoom <number>                 max zoom level to download
+  -t, --token <token>                 Mapbox access token (necessary for Mapbox
+                                      styles)
+  -h, --help                          display help for command
+"
+`;
+
+exports[`help output > smp mbtiles --help 1`] = `
+"Usage: smp-mbtiles [options] <mbtiles>
+
+Convert a MBTiles file to a styled map package file
+
+Arguments:
+  mbtiles              MBTiles file to convert
+
+Options:
+  -o, --output <file>  output smp file
+  -h, --help           display help for command
+"
+`;
+
+exports[`help output > smp view --help 1`] = `
+"Usage: smp-view [options] <file>
+
+Preview a styled map package in a web browser
+
+Arguments:
+  file                 file to serve
+
+Options:
+  -o, --open           open in the default web browser
+  -p, --port <number>  port to serve on (default: 3000)
+  -h, --help           display help for command
+"
+`;
