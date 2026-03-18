@@ -180,7 +180,7 @@ export class Reader {
       sourcePromise.catch(noop)
       zipPromise = sourcePromise.then((source) => {
         this.#fileSource = source
-        return ZipReader.from(source)
+        return ZipReader.from(source, { skipUniqueEntryCheck: true })
       })
     } else {
       zipPromise = Promise.resolve(filepathOrZip)
