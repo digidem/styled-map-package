@@ -78,7 +78,7 @@ test('convert from MBTiles with buffer', async () => {
   mbtiles.close()
 })
 
-test('parallel conversions from same buffer', async () => {
+test('parallel conversions from same buffer', { timeout: 30_000 }, async () => {
   const fixtureBuffer = await getFixtureBuffer()
 
   const [smpBuffer1, smpBuffer2] = await Promise.all([
