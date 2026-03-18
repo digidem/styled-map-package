@@ -124,11 +124,14 @@
     "itty-router": "^5.0.22",
     "ky": "^1.7.5",
     "map-obj": "^5.0.2",
-    "mbtiles-reader": "^1.0.0",
+    "mbtiles-reader": "^2.0.1",
     "p-limit": "^6.2.0",
     "readable-stream": "^4.7.0",
     "yocto-queue": "^1.1.1",
     "zip-writer": "^2.2.0"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^12.8.0"
   },
   "devDependencies": {
     "@commander-js/extra-typings": "^12.1.0",

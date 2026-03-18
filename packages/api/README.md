@@ -58,10 +58,17 @@ const stream = download({
 
 ### Converting from MBTiles
 
+> **Note:** MBTiles conversion requires Node >= 20 (uses `better-sqlite3` which dropped Node 18 support).
+
 ```js
 import { fromMBTiles } from 'styled-map-package-api/from-mbtiles'
 
+// From a file path (Node.js)
 const stream = fromMBTiles('path/to/tiles.mbtiles')
+
+// From an ArrayBuffer or Uint8Array (Node.js and browsers)
+const stream = fromMBTiles(buffer)
+
 // Pipe the ReadableStream to an .smp file
 ```
 

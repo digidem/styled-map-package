@@ -1,61 +1,164 @@
+import { ZipReader } from '@gmaclennan/zip-reader'
+import { BufferSource } from '@gmaclennan/zip-reader/buffer-source'
 import { MBTiles } from 'mbtiles-reader'
-import { temporaryFile } from 'tempy'
-import { onTestFinished, test } from 'vitest'
-
-import assert from 'node:assert/strict'
-import fs from 'node:fs'
-import { Writable } from 'node:stream'
-import { buffer } from 'node:stream/consumers'
-import { fileURLToPath } from 'node:url'
+import { describe, expect, test } from 'vitest'
 
 import { fromMBTiles } from '../lib/from-mbtiles.js'
 import { Reader } from '../lib/reader.js'
+import { streamToBuffer } from './utils/stream-consumers.js'
 
-test('convert from MBTiles', async () => {
-  const fixture = fileURLToPath(
-    new URL('./fixtures/plain_1.mbtiles', import.meta.url),
-  )
-  const output1 = temporaryFile()
-  const output2 = temporaryFile()
-
-  onTestFinished(() => {
-    fs.unlinkSync(output1)
-    fs.unlinkSync(output2)
-  })
-
-  await Promise.all([
-    fromMBTiles(fixture).pipeTo(Writable.toWeb(fs.createWriteStream(output1))),
-    fromMBTiles(fixture).pipeTo(Writable.toWeb(fs.createWriteStream(output2))),
-  ])
-
-  for (const output of [output1, output2]) {
-    const smp = new Reader(output)
-    const mbtiles = new MBTiles(fixture)
-    const style = await smp.getStyle('')
-    const sourceMetadata = Object.values(style.sources)[0]
-    assert.equal(sourceMetadata.type, 'raster')
-    let tileCount = 0
-    for (const { x, y, z, data } of mbtiles) {
-      tileCount++
-      const path = replaceVariables(sourceMetadata.tiles[0], { x, y, z })
-      const smpTile = await smp.getResource(path)
-      assert.deepEqual(await buffer(smpTile.stream), data)
-      assert.equal(smpTile.contentType, 'image/png')
-    }
-    assert(tileCount > 10, 'expected more than 10 tiles')
-  }
-})
+const isNode = typeof window === 'undefined'
 
 /**
- * Replaces variables in a string with values provided in an object. Variables
- * in the string are denoted by curly braces, e.g., {variableName}.
- *
- * @param {string} template - The string containing variables wrapped in curly braces.
- * @param {Record<string, string | number>} variables - An object where the keys correspond to variable names and values correspond to the replacement values.
- * @returns {string} The string with the variables replaced by their corresponding values.
+ * Fetch the plain_1.mbtiles fixture as an ArrayBuffer, cross-platform.
+ * @returns {Promise<ArrayBuffer>}
+ */
+async function getFixtureBuffer() {
+  if (isNode) {
+    const { readFileSync } = await import('node:fs')
+    const { fileURLToPath } = await import('node:url')
+    const path = fileURLToPath(
+      new URL('./fixtures/plain_1.mbtiles', import.meta.url),
+    )
+    const buf = readFileSync(path)
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+  }
+  const res = await fetch('/test/fixtures/plain_1.mbtiles')
+  if (!res.ok) throw new Error('Failed to fetch fixture')
+  return res.arrayBuffer()
+}
+
+/**
+ * @param {string} template
+ * @param {Record<string, string | number>} variables
+ * @returns {string}
  */
 function replaceVariables(template, variables) {
   return template.replace(/{(.*?)}/g, (match, varName) => {
     return varName in variables ? String(variables[varName]) : match
+  })
+}
+
+/**
+ * Verify that SMP buffer produced by fromMBTiles contains correct tiles.
+ *
+ * @param {Uint8Array} smpBuffer
+ * @param {MBTiles} mbtiles
+ */
+async function verifySmp(smpBuffer, mbtiles) {
+  const reader = new Reader(await ZipReader.from(new BufferSource(smpBuffer)))
+  const style = await reader.getStyle('')
+  const sourceMetadata = Object.values(style.sources)[0]
+  expect(sourceMetadata.type).toBe('raster')
+  const tileUrl = /** @type {string[]} */ (
+    /** @type {any} */ (sourceMetadata).tiles
+  )[0]
+
+  let tileCount = 0
+  for (const { x, y, z, data } of mbtiles) {
+    tileCount++
+    const path = replaceVariables(tileUrl, { x, y, z })
+    const smpTile = await reader.getResource(path)
+    const tileData = await streamToBuffer(smpTile.stream)
+    expect(tileData).toEqual(data)
+    expect(smpTile.contentType).toBe('image/png')
+  }
+  expect(tileCount).toBeGreaterThan(10)
+}
+
+test('convert from MBTiles with buffer', { timeout: 30_000 }, async () => {
+  const fixtureBuffer = await getFixtureBuffer()
+
+  const smpBuffer = await streamToBuffer(
+    fromMBTiles(new Uint8Array(fixtureBuffer)),
+  )
+
+  const mbtiles = await MBTiles.open(new Uint8Array(fixtureBuffer))
+  await verifySmp(smpBuffer, mbtiles)
+  mbtiles.close()
+})
+
+test('parallel conversions from same buffer', { timeout: 30_000 }, async () => {
+  const fixtureBuffer = await getFixtureBuffer()
+
+  const [smpBuffer1, smpBuffer2] = await Promise.all([
+    streamToBuffer(fromMBTiles(new Uint8Array(fixtureBuffer))),
+    streamToBuffer(fromMBTiles(new Uint8Array(fixtureBuffer))),
+  ])
+
+  const mbtiles = await MBTiles.open(new Uint8Array(fixtureBuffer))
+  await verifySmp(smpBuffer1, mbtiles)
+  mbtiles.close()
+
+  const mbtiles2 = await MBTiles.open(new Uint8Array(fixtureBuffer))
+  await verifySmp(smpBuffer2, mbtiles2)
+  mbtiles2.close()
+})
+
+// Browser-specific tests are guarded behind a dynamic import-style check
+// to avoid referencing browser globals (navigator, Worker) in Node.
+if (!isNode) {
+  /**
+   * @param {Worker} worker
+   * @param {any} message
+   * @param {Transferable[]} [transfer]
+   * @returns {Promise<any>}
+   */
+  function workerRpc(worker, message, transfer = []) {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(
+        () => reject(new Error('Worker timeout')),
+        30000,
+      )
+      worker.onmessage = (event) => {
+        clearTimeout(timeout)
+        if (event.data.type === 'error') {
+          reject(new Error(event.data.message))
+        } else {
+          resolve(event.data)
+        }
+      }
+      worker.onerror = (error) => {
+        clearTimeout(timeout)
+        reject(error)
+      }
+      worker.postMessage(message, transfer)
+    })
+  }
+
+  // OPFS requires a Worker context. Playwright WebKit uses ephemeral
+  // contexts that do not support OPFS.
+  const isSafariWebKit =
+    /AppleWebKit/.test(navigator.userAgent) &&
+    !/Chrome/.test(navigator.userAgent)
+
+  describe('OPFS worker', () => {
+    test.skipIf(isSafariWebKit)(
+      'convert from MBTiles via OPFS worker',
+      async () => {
+        const worker = new globalThis.Worker(
+          new URL('./opfs-smp-worker.js', import.meta.url),
+          { type: 'module' },
+        )
+        try {
+          const fixtureBuffer = await getFixtureBuffer()
+
+          const result = await workerRpc(
+            worker,
+            { type: 'convert', buffer: fixtureBuffer },
+            [fixtureBuffer],
+          )
+          expect(result.type).toBe('result')
+          expect(result.buffer).toBeInstanceOf(ArrayBuffer)
+
+          const smpBuffer = new Uint8Array(result.buffer)
+          const mbtiles = await MBTiles.open(await getFixtureBuffer())
+          await verifySmp(smpBuffer, mbtiles)
+          mbtiles.close()
+        } finally {
+          worker.terminate()
+        }
+      },
+    )
   })
 }
