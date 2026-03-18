@@ -88,13 +88,13 @@ test('style has correct source and root properties', async () => {
   const source = Object.values(style.sources)[0]
 
   // tileSize must be 256 (MBTiles standard tile size, not MapLibre default of 512)
-  expect(source.tileSize).toBe(256)
+  expect(source).toHaveProperty('tileSize', 256)
 
   // Valid source properties should be present
-  expect(source.type).toBe('raster')
-  expect(source.minzoom).toBe(0)
-  expect(source.maxzoom).toBe(4)
-  expect(source.scheme).toBe('xyz')
+  expect(source).toHaveProperty('type', 'raster')
+  expect(source).toHaveProperty('minzoom', 0)
+  expect(source).toHaveProperty('maxzoom', 4)
+  expect(source).toHaveProperty('scheme', 'xyz')
 
   // Non-source properties from MBTiles metadata should not leak into the source
   expect(source).not.toHaveProperty('name')
