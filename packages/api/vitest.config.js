@@ -5,6 +5,11 @@ import { fileURLToPath } from 'node:url'
 /** Files that are helpers/utilities, not test suites */
 const nonTestFiles = ['test/utils/**/*.js', 'test/*-worker.js']
 
+const nodeMajor = parseInt(process.versions.node)
+
+/** mbtiles-reader v2 requires better-sqlite3 v12+, which needs Node >= 20 */
+const requiresNode20 = nodeMajor < 20 ? ['test/from-mbtiles.js'] : []
+
 /** @type {import('vitest/dist/node.js').BrowserInstanceOption[]} */
 const browserInstances = [{ browser: 'chromium' }]
 
@@ -34,7 +39,7 @@ export default defineConfig({
           pool: 'forks',
           environment: 'node',
           include: ['test/**/*.js'],
-          exclude: [...nonTestFiles, 'test/*.bench.js'],
+          exclude: [...nonTestFiles, ...requiresNode20, 'test/*.bench.js'],
         },
       },
       {
