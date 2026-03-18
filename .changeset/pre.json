@@ -6,6 +6,8 @@
     "styled-map-package": "4.1.0"
   },
   "changesets": [
+    "famous-bags-teach",
+    "fast-eels-attack",
     "kind-hotels-arrive",
     "monorepo-refactor",
     "olive-toes-sniff",
