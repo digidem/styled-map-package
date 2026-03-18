@@ -55,6 +55,14 @@ export const SUPPORTED_SOURCE_TYPES = /** @type {const} */ ([
 ])
 
 /**
+ * @typedef {object} WriterOptions
+ * @property {boolean} [dedupe] When true, duplicate tiles (with identical
+ *   content) are stored only once in the archive. Additional entries in the
+ *   central directory point to the same data. This reduces file size for
+ *   tilesets with many repeated tiles (e.g. ocean tiles).
+ */
+
+/**
  * Write a styled map package to a stream. Stream `writer.outputStream` to a
  * destination, e.g. `fs.createWriteStream('my-map.styledmap')`. You must call
  * `witer.finish()` and then wait for your writable stream to `finish` before
@@ -76,6 +84,12 @@ export class Writer {
   #outputStream
   /** @type {ReadableStreamDefaultController<Uint8Array>} */
   #outputController
+  /** @type {boolean} */
+  #dedupe
+  /** @type {Map<string, string>} hash → first entry name */
+  #tileHashes = new Map()
+  /** @type {Array<{ name: string, originalName: string }>} */
+  #duplicateEntries = []
 
   static SUPPORTED_SOURCE_TYPES = SUPPORTED_SOURCE_TYPES
 
@@ -83,8 +97,9 @@ export class Writer {
    * @param {any} style A v7 or v8 MapLibre style. v7 styles will be migrated to
    * v8. (There are currently no typescript declarations for v7 styles, hence
    * this is typed as `any` and validated internally)
+   * @param {WriterOptions} [options]
    */
-  constructor(style) {
+  constructor(style, { dedupe = false } = {}) {
     if (!style || !('version' in style)) {
       throw new Error('Invalid style')
     }
@@ -104,6 +119,7 @@ export class Writer {
       throw new AggregateError(errors, 'Invalid style')
     }
     this.#style = styleCopy
+    this.#dedupe = dedupe
 
     for (const [sourceId, source] of Object.entries(this.#style.sources)) {
       if (source.type !== 'geojson') continue
@@ -294,6 +310,25 @@ export class Writer {
     }
 
     const name = getTileFilename({ sourceId: encodedSourceId, z, x, y, format })
+
+    if (this.#dedupe) {
+      const data = await toUint8Array(tileData)
+      const hash = await hashData(data)
+      if (this.#addedFiles.has(name)) {
+        throw new Error(`${name} already added`)
+      }
+      this.#addedFiles.add(name)
+      const existingName = this.#tileHashes.get(hash)
+      if (existingName) {
+        this.#duplicateEntries.push({ name, originalName: existingName })
+        return
+      }
+      this.#tileHashes.set(hash, name)
+      const readable = toWebStream(data)
+      await this.#zipWriter.addEntry({ readable, name, store: true })
+      return
+    }
+
     // Tiles are stored without compression, because tiles are normally stored
     // as a compressed format.
     return this.#append(tileData, { name, store: true })
@@ -365,7 +400,19 @@ export class Writer {
     this.#prepareStyle()
     const style = JSON.stringify(this.#style)
     await this.#append(style, { name: STYLE_FILE })
-    const entries = await this.#zipWriter.entries()
+    let entries = await this.#zipWriter.entries()
+
+    if (this.#duplicateEntries.length > 0) {
+      const entriesByName = new Map(entries.map((e) => [e.name, e]))
+      for (const { name, originalName } of this.#duplicateEntries) {
+        const original = entriesByName.get(originalName)
+        if (!original) {
+          throw new Error(`Original entry ${originalName} not found`)
+        }
+        entries.push({ ...original, name })
+      }
+    }
+
     const sortedEntries = sortEntries(entries)
     await this.#zipWriter.finalize({ entries: sortedEntries })
   }
@@ -512,6 +559,53 @@ function isEmptyFeatureCollection(data) {
 function get2DBBox(bbox) {
   if (bbox.length === 4) return bbox
   return [bbox[0], bbox[1], bbox[3], bbox[4]]
+}
+
+/**
+ * Consume a Source into a Uint8Array buffer.
+ *
+ * @param {Source} source
+ * @returns {Promise<Uint8Array>}
+ */
+async function toUint8Array(source) {
+  if (source instanceof Uint8Array) return source
+  if (typeof source === 'string') return new TextEncoder().encode(source)
+  // ReadableStream — consume all chunks
+  const reader = /** @type {ReadableStream<Uint8Array>} */ (source).getReader()
+  const chunks = []
+  let totalLength = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    chunks.push(value)
+    totalLength += value.byteLength
+  }
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const chunk of chunks) {
+    result.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return result
+}
+
+/**
+ * Compute a SHA-256 hex digest of binary data.
+ *
+ * @param {Uint8Array} data
+ * @returns {Promise<string>}
+ */
+async function hashData(data) {
+  /** @type {any} */
+  let c = globalThis.crypto
+  if (!c) {
+    c = (await import('node:crypto')).webcrypto
+  }
+  // @ts-ignore - Uint8Array is a valid BufferSource despite TS type mismatch with ArrayBufferLike
+  const buf = await c.subtle.digest('SHA-256', data)
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
 }
 
 /**

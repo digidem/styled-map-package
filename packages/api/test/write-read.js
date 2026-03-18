@@ -47,6 +47,21 @@ function randomWebStream({ size }) {
 }
 
 /**
+ * Fill a Uint8Array with random bytes. Works in Node 18+ and browsers.
+ * @param {Uint8Array} bytes
+ * @returns {Promise<Uint8Array>}
+ */
+async function randomBytes(bytes) {
+  /** @type {any} */
+  let c = globalThis.crypto
+  if (!c) {
+    c = (await import('crypto')).webcrypto
+  }
+  c.getRandomValues(bytes)
+  return bytes
+}
+
+/**
  * Compute SHA-256 hex digest of a Uint8Array.
  * @param {Uint8Array} data
  * @returns {Promise<string>}
@@ -712,6 +727,172 @@ test('Optimized central directory order', async () => {
   expect(
     entriesFilenames.slice(0, expectedFirstEntriesFilenames.length),
   ).toStrictEqual(expectedFirstEntriesFilenames)
+})
+
+test('Dedupe: duplicate tiles are stored once and read back correctly', async () => {
+  const styleInUrl = new URL(
+    './fixtures/valid-styles/minimal.input.json',
+    import.meta.url,
+  )
+  const styleIn = await readJson(styleInUrl)
+
+  // Write without dedupe
+  const writerNormal = new Writer(styleIn)
+  const smpNormalPromise = streamToBuffer(writerNormal.outputStream)
+  // Write with dedupe
+  const writerDedupe = new Writer(styleIn, { dedupe: true })
+  const smpDedupePromise = streamToBuffer(writerDedupe.outputStream)
+
+  const sourceId = 'maplibre'
+  // Create a shared tile buffer to use as duplicate content
+  const sharedTileData = await randomBytes(new Uint8Array(1024))
+  const sharedTileHash = await sha256hex(sharedTileData)
+
+  const uniqueTileData = await randomBytes(new Uint8Array(2048))
+  const uniqueTileHash = await sha256hex(uniqueTileData)
+
+  const tiles = [
+    { x: 0, y: 0, z: 0 }, // shared
+    { x: 0, y: 0, z: 1 }, // shared (duplicate)
+    { x: 1, y: 0, z: 1 }, // shared (duplicate)
+    { x: 0, y: 1, z: 1 }, // unique
+    { x: 1, y: 1, z: 1 }, // shared (duplicate)
+  ]
+  const tileDataMap = [
+    sharedTileData,
+    sharedTileData,
+    sharedTileData,
+    uniqueTileData,
+    sharedTileData,
+  ]
+
+  for (let i = 0; i < tiles.length; i++) {
+    // Use copies so the stream isn't consumed twice
+    await writerNormal.addTile(new Uint8Array(tileDataMap[i]), {
+      ...tiles[i],
+      sourceId,
+      format: 'mvt',
+    })
+    await writerDedupe.addTile(new Uint8Array(tileDataMap[i]), {
+      ...tiles[i],
+      sourceId,
+      format: 'mvt',
+    })
+  }
+
+  writerNormal.finish()
+  writerDedupe.finish()
+
+  const [smpNormal, smpDedupe] = await Promise.all([
+    smpNormalPromise,
+    smpDedupePromise,
+  ])
+
+  expect(
+    smpDedupe.byteLength,
+    'Deduplicated SMP should be smaller',
+  ).toBeLessThan(smpNormal.byteLength)
+
+  // Iterate ZIP entries and verify that duplicate tiles share the same
+  // local file header offset (i.e. the data is truly stored only once).
+  const zipRaw = await ZipReader.from(new BufferSource(smpDedupe), {
+    skipUniqueEntryCheck: true,
+  })
+  /** @type {Array<{ name: string, crc32: number, offset: number }>} */
+  const tileZipEntries = []
+  for await (const entry of zipRaw) {
+    if (entry.name.startsWith('s/')) {
+      tileZipEntries.push({
+        name: entry.name,
+        crc32: entry.crc32,
+        offset: entry.fileHeaderOffset,
+      })
+    }
+  }
+  expect(
+    tileZipEntries,
+    'All 5 tile entries in central directory',
+  ).toHaveLength(5)
+
+  // Group tile entries by CRC32
+  /** @type {Map<number, Set<number>>} crc32 → set of offsets */
+  const offsetsByCrc = new Map()
+  for (const { crc32, offset } of tileZipEntries) {
+    if (!offsetsByCrc.has(crc32)) offsetsByCrc.set(crc32, new Set())
+    offsetsByCrc.get(crc32)?.add(offset)
+  }
+  expect(
+    offsetsByCrc.size,
+    'Only 2 unique CRC32 values among tile entries',
+  ).toBe(2)
+  // Each group of entries sharing the same CRC32 must point to the same offset
+  for (const [, offsets] of offsetsByCrc) {
+    expect(
+      offsets.size,
+      'Entries with the same CRC32 share the same offset',
+    ).toBe(1)
+  }
+
+  // Also verify the unique tile has a different offset than the shared tiles
+  const allOffsets = [...offsetsByCrc.values()].map((s) => [...s][0])
+  expect(
+    allOffsets[0],
+    'Shared and unique tiles have different offsets',
+  ).not.toBe(allOffsets[1])
+
+  // Read back deduplicated SMP and verify all tiles return correct data
+  const reader = new Reader(
+    await ZipReader.from(new BufferSource(smpDedupe), {
+      skipUniqueEntryCheck: true,
+    }),
+  )
+  const readerHelper = new ReaderHelper(reader)
+
+  for (let i = 0; i < tiles.length; i++) {
+    const expectedHash = i === 3 ? uniqueTileHash : sharedTileHash
+    const hash = await readerHelper.getTileHash({ ...tiles[i], sourceId })
+    expect(hash, `Tile ${tiles[i].z}/${tiles[i].x}/${tiles[i].y}`).toBe(
+      expectedHash,
+    )
+  }
+})
+
+test('Dedupe: no duplicates produces same result as non-dedupe', async () => {
+  const styleInUrl = new URL(
+    './fixtures/valid-styles/minimal.input.json',
+    import.meta.url,
+  )
+  const styleIn = await readJson(styleInUrl)
+  const writer = new Writer(styleIn, { dedupe: true })
+  const smpPromise = streamToBuffer(writer.outputStream)
+  const sourceId = 'maplibre'
+
+  const tileHashes = new Map()
+  for (const { x, y, z } of [
+    { x: 0, y: 0, z: 0 },
+    { x: 0, y: 0, z: 1 },
+    { x: 1, y: 0, z: 1 },
+  ]) {
+    const data = await randomBytes(new Uint8Array(random(1024, 2048)))
+    tileHashes.set(`${z}/${x}/${y}`, await sha256hex(data))
+    await writer.addTile(data, { x, y, z, sourceId, format: 'mvt' })
+  }
+
+  writer.finish()
+
+  const smp = await smpPromise
+  const reader = new Reader(
+    await ZipReader.from(new BufferSource(smp), {
+      skipUniqueEntryCheck: true,
+    }),
+  )
+  const readerHelper = new ReaderHelper(reader)
+
+  for (const [tileId, expectedHash] of tileHashes) {
+    const [z, x, y] = tileId.split('/').map(Number)
+    const hash = await readerHelper.getTileHash({ x, y, z, sourceId })
+    expect(hash, `Tile ${tileId}`).toBe(expectedHash)
+  }
 })
 
 /**
