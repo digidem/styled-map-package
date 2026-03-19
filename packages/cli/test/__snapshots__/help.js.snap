@@ -59,6 +59,8 @@ Arguments:
 Options:
   -o, --open           open in the default web browser
   -p, --port <number>  port to serve on (default: 3000)
+  -f, --fallback       serve empty tiles and glyphs for missing resources
+                       instead of 404
   -h, --help           display help for command
 "
 `;

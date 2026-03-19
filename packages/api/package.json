@@ -87,6 +87,16 @@
         "default": "./dist/from-mbtiles.cjs"
       }
     },
+    "./fallbacks": {
+      "import": {
+        "types": "./dist/fallbacks.d.ts",
+        "default": "./dist/fallbacks.js"
+      },
+      "require": {
+        "types": "./dist/fallbacks.d.cts",
+        "default": "./dist/fallbacks.cjs"
+      }
+    },
     "./utils/mapbox": {
       "import": {
         "types": "./dist/utils/mapbox.d.ts",
