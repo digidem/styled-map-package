@@ -1178,7 +1178,11 @@ describe('Spec §5.4: Tile coordinate scheme', () => {
     const reader = await readerFromBuffer(smpBuf)
     const readStyle = await reader.getStyle()
     const source = readStyle.sources.tms_source
-    assert(!('scheme' in source), 'scheme property should be removed')
+    assert.equal(
+      /** @type {any} */ (source).scheme,
+      'xyz',
+      'scheme should be forced to xyz',
+    )
     assert('tiles' in source, 'tiles property should be present')
     await reader.close()
   })

@@ -249,7 +249,7 @@ All tiles within a single source MUST use the same format. A source MUST NOT con
 
 Tile coordinates MUST use the [XYZ / Slippy Map](https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames) tile naming scheme, where the origin (`x=0, y=0`) is at the top-left (north-west) corner of the map. This is the default scheme used by MapLibre's `tiles` property.
 
-Sources MUST NOT use the `scheme` property with the value `"tms"`. If the original style contains a source with `"scheme": "tms"`, the writer MUST convert tile Y coordinates from TMS to XYZ using the formula `y_xyz = 2^z - y_tms - 1`, store the tiles using the converted XYZ coordinates, and remove the `scheme` property from the source.
+Tile sources in `style.json` MUST have their `scheme` property set to `"xyz"` (or omitted, since `"xyz"` is the MapLibre default). If the original style contains a source with `"scheme": "tms"`, the writer MUST convert tile Y coordinates from TMS to XYZ using the formula `y_xyz = 2^z - y_tms - 1`, store the tiles using the converted XYZ coordinates, and set the `scheme` property to `"xyz"`.
 
 ### 5.5 Tile URL Template
 

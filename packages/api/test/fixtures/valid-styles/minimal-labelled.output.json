@@ -43,6 +43,7 @@
   "sources": {
     "maplibre": {
       "type": "vector",
+      "scheme": "xyz",
       "minzoom": 0,
       "maxzoom": 0,
       "bounds": [

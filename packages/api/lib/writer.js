@@ -234,6 +234,7 @@ export class Writer {
       case 'vector':
         smpSource = {
           ...excludeKeys(source, ['tiles', 'url', 'scheme']),
+          scheme: 'xyz',
           ...tileSourceOverrides,
         }
         break
