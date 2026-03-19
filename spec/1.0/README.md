@@ -38,13 +38,15 @@ The archive SHOULD also contain:
 
 The archive MAY additionally contain tile data files, glyph (font) protobuf files, and sprite layout and image files. The paths of these files are determined by the URIs in `style.json` (see [Section 4.2](#42-smp-uri-scheme)).
 
-Resources MUST be organized under the following top-level folders:
+It is RECOMMENDED that resources are organized under the following top-level folders:
 
 | Folder     | Contents                      |
 | ---------- | ----------------------------- |
 | `s/`       | Tile and GeoJSON source data  |
 | `fonts/`   | Glyph (font) protobuf files   |
 | `sprites/` | Sprite layout and image files |
+
+The actual folder structure is determined by the SMP URIs in `style.json` (see [Section 4.2](#42-smp-uri-scheme)). Readers MUST NOT assume fixed folder names — they MUST resolve resource paths from the URIs in the style document.
 
 ### 3.1 VERSION File
 
@@ -178,6 +180,12 @@ The `style.json` `metadata` object MAY contain the following SMP-specific proper
 - SHOULD equal the maximum zoom level of any tile source in the package.
 - For GeoJSON-only packages, the value SHOULD be 16 (the default GeoJSON rendering max zoom).
 
+#### 4.3.3 `smp:sourceFolders` (OPTIONAL)
+
+- Type: Object (string to string mapping)
+- Maps source IDs (as they appear in `style.sources`) to their folder names within the archive.
+- Implementations MAY use this as a convenience for mapping source IDs to archive paths without parsing tile URL templates.
+
 ### 4.4 Additional Style Properties
 
 The standard [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/) properties `center` and `zoom`, if set, SHOULD be consistent with the data in the package — i.e. `center` SHOULD be within `smp:bounds` and `zoom` SHOULD be within the zoom range of the tile data (between `minzoom` and `smp:maxzoom`).
@@ -197,9 +205,9 @@ Other source types (e.g., `raster-dem`, `image`, `video`) are not supported by t
 
 ### 5.2 Tile File Paths
 
-Tile files MUST be stored under the `s/` folder. Tile file paths MUST match the URL template specified in the source's `tiles` property in `style.json` (see [Section 5.5](#55-tile-url-template)), with the `{z}`, `{x}`, and `{y}` placeholders replaced by actual tile coordinates.
+Tile file paths MUST match the URL template specified in the source's `tiles` property in `style.json` (see [Section 5.5](#55-tile-url-template)), with the `{z}`, `{x}`, and `{y}` placeholders replaced by actual tile coordinates.
 
-The source identifier subfolder within `s/` is determined by the implementation. It is RECOMMENDED that source subfolder names are kept as short as possible, because the file path is stored in the ZIP central directory record for every tile, and shorter paths reduce the overall archive size. It is RECOMMENDED that the subfolder name matches the source ID in `style.json`.
+The folder structure for tiles is determined by the implementation. It is RECOMMENDED that tile path prefixes are kept as short as possible, because the file path is stored in the ZIP central directory record for every tile, and shorter paths reduce the overall archive size. It is RECOMMENDED that the source subfolder name matches the source ID in `style.json`.
 
 Tile file paths MUST end with a file extension that reflects their format. The following extensions are recognized:
 
@@ -262,7 +270,7 @@ All tiles at zoom levels between `minzoom` and `maxzoom` (inclusive) that inters
 
 ### 6.1 Glyph File Paths
 
-Glyph files MUST be stored under the `fonts/` folder. Glyph file paths MUST match the URL template specified in the `glyphs` property in `style.json` (see [Section 6.3](#63-glyph-uri-template)), with the `{fontstack}` and `{range}` placeholders replaced by actual values.
+Glyph file paths MUST match the URL template specified in the `glyphs` property in `style.json` (see [Section 6.3](#63-glyph-uri-template)), with the `{fontstack}` and `{range}` placeholders replaced by actual values.
 
 Each glyph file corresponds to a Unicode range in the format `{start}-{end}` where:
 
@@ -276,7 +284,7 @@ Glyph files MUST be [Protocol Buffer](https://protobuf.dev/) files using the [Ma
 
 Glyph files SHOULD be stored gzip-compressed (`.pbf.gz`). If stored uncompressed (`.pbf`), the serving implementation would need to compress them on the fly for clients that expect gzip-encoded responses.
 
-Files with a `.pbf` extension (without `.gz`) MUST NOT contain gzip-compressed data. Files with a `.pbf.gz` extension MUST contain gzip-compressed data.\*\*\*\*
+Files with a `.pbf` extension (without `.gz`) MUST NOT contain gzip-compressed data. Files with a `.pbf.gz` extension MUST contain gzip-compressed data.
 
 ### 6.3 Glyph URI Template
 
@@ -316,7 +324,7 @@ The SMP file MUST include glyph files for every `{fontstack}` value that MapLibr
 
 ### 7.1 Sprite File Paths
 
-Sprite files MUST be stored under the `sprites/` folder. The [MapLibre Sprite Specification](https://maplibre.org/maplibre-style-spec/sprite/) defines how the mapping library resolves sprite URIs by appending a pixel ratio suffix and a file extension to the base URI.
+The [MapLibre Sprite Specification](https://maplibre.org/maplibre-style-spec/sprite/) defines how the mapping library resolves sprite URIs by appending a pixel ratio suffix and a file extension to the base URI. Sprite file paths in the archive MUST match the resolved URIs.
 
 For each sprite referenced in `style.json`, the following files MUST be present:
 
@@ -334,7 +342,7 @@ The following files are OPTIONAL but RECOMMENDED:
 
 Higher pixel ratios (3x, 4x, etc.) MAY also be included using the `@{N}x` suffix convention.
 
-The sprite subfolder name within `sprites/` is determined by the implementation. It is RECOMMENDED that the subfolder name matches the sprite ID in `style.json`. For styles with a single sprite (string form), the RECOMMENDED subfolder name is `default`.
+The sprite folder structure is determined by the implementation. It is RECOMMENDED that the subfolder name matches the sprite ID in `style.json`. For styles with a single sprite (string form), the RECOMMENDED subfolder name is `default`.
 
 ### 7.2 Sprite Index Format
 
@@ -379,7 +387,7 @@ GeoJSON sources with inline data (where the `data` property is a GeoJSON object)
 
 ### 8.2 URL-Referenced GeoJSON
 
-GeoJSON sources that reference an external URL (where the `data` property is a string URL) SHOULD have their data fetched and stored as a file in the `s/` folder. The source's `data` property MUST be replaced with an SMP URI pointing to the stored file. It is RECOMMENDED that the GeoJSON file is stored in a subfolder named with the source ID.
+GeoJSON sources that reference an external URL (where the `data` property is a string URL) SHOULD have their data fetched and stored as a file in the archive. The source's `data` property MUST be replaced with an SMP URI pointing to the stored file. It is RECOMMENDED that GeoJSON files are stored alongside tile data (e.g. under `s/`) in a subfolder named with the source ID.
 
 GeoJSON data files MUST use the `.json` extension (not `.geojson`) and SHOULD NOT be gzip-compressed.
 
