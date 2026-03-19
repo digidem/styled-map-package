@@ -27,5 +27,11 @@ Thumbs.db
 # SMP artifacts from testing
 /*.smp
 
+# Git LFS hooks (auto-created by `git lfs install`)
+.husky/post-checkout
+.husky/post-commit
+.husky/post-merge
+.husky/pre-push
+
 # Published directory for npm
 dist/

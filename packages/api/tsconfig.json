@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2022"],
+
+    "allowJs": true,
+    "checkJs": true,
+    "module": "NodeNext",
+    "moduleDetection": "force",
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+
+    "strict": true,
+    "noImplicitOverride": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "skipLibCheck": true,
+    "typeRoots": ["types", "node_modules/@types"],
+    "rootDir": "."
+  },
+  "include": ["**/*"],
+  "exclude": ["node_modules", "dist", "coverage"]
+}
