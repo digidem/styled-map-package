@@ -62,8 +62,8 @@
     ],
     "smp:maxzoom": 0,
     "smp:sourceFolders": {
-      "png-tiles": "0",
-      "jpg-tiles": "1"
+      "png-tiles": "s/0",
+      "jpg-tiles": "s/1"
     }
   }
 }

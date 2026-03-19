@@ -86,7 +86,7 @@
     ],
     "smp:maxzoom": 5,
     "smp:sourceFolders": {
-      "maplibre": "0"
+      "maplibre": "s/0"
     }
   }
 }

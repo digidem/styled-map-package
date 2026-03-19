@@ -7,6 +7,8 @@ import assert from 'node:assert/strict'
 
 import { Reader } from '../lib/reader.js'
 import { createServer } from '../lib/server.js'
+import { tmsToXyzY } from '../lib/utils/geo.js'
+import { getContentType } from '../lib/utils/templates.js'
 import { Writer } from '../lib/writer.js'
 import { streamToBuffer } from './utils/stream-consumers.js'
 
@@ -1082,7 +1084,7 @@ describe('Writer metadata', () => {
     const reader = await readerFromBuffer(smpBuf)
     const style = await reader.getStyle()
     assert(style.metadata['smp:sourceFolders'], 'should include sourceFolders')
-    assert.equal(style.metadata['smp:sourceFolders'].test, '0')
+    assert.equal(style.metadata['smp:sourceFolders'].test, 's/0')
     await reader.close()
   })
 
@@ -1094,6 +1096,196 @@ describe('Writer metadata', () => {
     assert(Array.isArray(style.metadata['smp:bounds']))
     assert.equal(style.metadata['smp:bounds'].length, 4)
     assert.equal(typeof style.metadata['smp:maxzoom'], 'number')
+    await reader.close()
+  })
+})
+
+// ============================================================================
+// Section 4.1: Metadata round-tripping
+// ============================================================================
+describe('Spec §4.1: Metadata round-tripping', () => {
+  test('Writer preserves existing metadata properties', async () => {
+    const style = {
+      version: 8,
+      sources: { test: { type: 'vector' } },
+      layers: [{ id: 'bg', type: 'background' }],
+      metadata: {
+        'custom:tool': 'my-map-editor',
+        'custom:version': 42,
+        'custom:nested': { a: 1, b: [2, 3] },
+      },
+    }
+    const writer = new Writer(style)
+    const smpBufPromise = streamToBuffer(writer.outputStream)
+    await writer.addTile(new Uint8Array(1024), {
+      z: 0,
+      x: 0,
+      y: 0,
+      sourceId: 'test',
+      format: 'mvt',
+    })
+    await writer.finish()
+    const smpBuf = await smpBufPromise
+    const reader = await readerFromBuffer(smpBuf)
+    const readStyle = await reader.getStyle()
+    assert.equal(readStyle.metadata['custom:tool'], 'my-map-editor')
+    assert.equal(readStyle.metadata['custom:version'], 42)
+    assert.deepEqual(readStyle.metadata['custom:nested'], { a: 1, b: [2, 3] })
+    // SMP-specific metadata should also be present
+    assert(readStyle.metadata['smp:bounds'], 'should also have smp:bounds')
+    assert.equal(typeof readStyle.metadata['smp:maxzoom'], 'number')
+    await reader.close()
+  })
+})
+
+// ============================================================================
+// Section 5.4: TMS to XYZ conversion
+// ============================================================================
+describe('Spec §5.4: Tile coordinate scheme', () => {
+  test('tmsToXyzY converts TMS Y to XYZ Y correctly', () => {
+    // At zoom 0, there's only one tile: TMS y=0 → XYZ y=0
+    assert.equal(tmsToXyzY({ y: 0, z: 0 }), 0)
+    // At zoom 1 (2 tiles vertically): TMS y=0 (bottom) → XYZ y=1, TMS y=1 (top) → XYZ y=0
+    assert.equal(tmsToXyzY({ y: 0, z: 1 }), 1)
+    assert.equal(tmsToXyzY({ y: 1, z: 1 }), 0)
+    // At zoom 2 (4 tiles vertically)
+    assert.equal(tmsToXyzY({ y: 0, z: 2 }), 3)
+    assert.equal(tmsToXyzY({ y: 3, z: 2 }), 0)
+  })
+
+  test('Writer strips scheme property from tile sources', async () => {
+    const style = {
+      version: 8,
+      sources: {
+        tms_source: {
+          type: 'vector',
+          scheme: 'tms',
+        },
+      },
+      layers: [{ id: 'bg', type: 'background' }],
+    }
+    const writer = new Writer(style)
+    const smpBufPromise = streamToBuffer(writer.outputStream)
+    await writer.addTile(new Uint8Array(1024), {
+      z: 0,
+      x: 0,
+      y: 0,
+      sourceId: 'tms_source',
+      format: 'mvt',
+    })
+    await writer.finish()
+    const smpBuf = await smpBufPromise
+    const reader = await readerFromBuffer(smpBuf)
+    const readStyle = await reader.getStyle()
+    const source = readStyle.sources.tms_source
+    assert(!('scheme' in source), 'scheme property should be removed')
+    assert('tiles' in source, 'tiles property should be present')
+    await reader.close()
+  })
+})
+
+// ============================================================================
+// Section 8.2 & 10.1: .geojson extension support
+// ============================================================================
+describe('Spec §8.2: GeoJSON file extensions', () => {
+  test('getContentType returns correct type for .geojson files', () => {
+    assert.equal(
+      getContentType('s/my-source/data.geojson'),
+      'application/json; charset=utf-8',
+    )
+    // .json should still work
+    assert.equal(
+      getContentType('s/my-source/data.json'),
+      'application/json; charset=utf-8',
+    )
+  })
+
+  test('Reader serves .geojson files with correct content-type', async () => {
+    const geojsonData = {
+      type: 'FeatureCollection',
+      features: [],
+      bbox: [0, 0, 1, 1],
+    }
+    const style = {
+      version: 8,
+      sources: {
+        places: {
+          type: 'geojson',
+          data: 'smp://maps.v1/s/places/data.geojson',
+        },
+      },
+      layers: [{ id: 'bg', type: 'background' }],
+    }
+    const zipBuffer = await createZipBuffer([
+      { name: 'VERSION', data: '1.0\n' },
+      { name: 'style.json', data: JSON.stringify(style) },
+      { name: 's/places/data.geojson', data: JSON.stringify(geojsonData) },
+    ])
+    const reader = await readerFromBuffer(zipBuffer)
+    const resource = await reader.getResource('s/places/data.geojson')
+    assert.equal(resource.contentType, 'application/json; charset=utf-8')
+    await reader.close()
+  })
+
+  test('Server serves .geojson files with correct content-type', async () => {
+    const geojsonData = {
+      type: 'FeatureCollection',
+      features: [],
+      bbox: [0, 0, 1, 1],
+    }
+    const style = {
+      version: 8,
+      sources: {
+        places: {
+          type: 'geojson',
+          data: 'smp://maps.v1/s/places/data.geojson',
+        },
+      },
+      layers: [{ id: 'bg', type: 'background' }],
+    }
+    const zipBuffer = await createZipBuffer([
+      { name: 'VERSION', data: '1.0\n' },
+      { name: 'style.json', data: JSON.stringify(style) },
+      { name: 's/places/data.geojson', data: JSON.stringify(geojsonData) },
+    ])
+    const reader = await readerFromBuffer(zipBuffer)
+    const server = createServer()
+    const response = await server.fetch(
+      new Request('http://example.com/s/places/data.geojson'),
+      reader,
+    )
+    assert.equal(response.status, 200)
+    assert.equal(
+      response.headers.get('content-type'),
+      'application/json; charset=utf-8',
+    )
+    const body = await response.json()
+    assert.equal(body.type, 'FeatureCollection')
+    await reader.close()
+  })
+
+  test('Reader resolves .geojson smp:// URIs with baseUrl', async () => {
+    const style = {
+      version: 8,
+      sources: {
+        places: {
+          type: 'geojson',
+          data: 'smp://maps.v1/s/places/data.geojson',
+        },
+      },
+      layers: [{ id: 'bg', type: 'background' }],
+    }
+    const zipBuffer = await createZipBuffer([
+      { name: 'VERSION', data: '1.0\n' },
+      { name: 'style.json', data: JSON.stringify(style) },
+      { name: 's/places/data.geojson', data: '{}' },
+    ])
+    const reader = await readerFromBuffer(zipBuffer)
+    const readStyle = await reader.getStyle('http://localhost:3000/')
+    assert.equal(
+      /** @type {any} */ (readStyle.sources.places).data,
+      'http://localhost:3000/s/places/data.geojson',
+    )
     await reader.close()
   })
 })

@@ -895,6 +895,127 @@ test('Dedupe: no duplicates produces same result as non-dedupe', async () => {
   }
 })
 
+test('Writer transforms match expression text-font to single fonts', async () => {
+  const styleInUrl = new URL(
+    './fixtures/valid-styles/minimal.input.json',
+    import.meta.url,
+  )
+  const styleIn = await readJson(styleInUrl)
+  styleIn.layers.push({
+    id: 'labels',
+    type: 'symbol',
+    source: 'maplibre',
+    'source-layer': 'places',
+    layout: {
+      'text-field': '{name}',
+      'text-font': [
+        'match',
+        ['get', 'type'],
+        'park',
+        ['literal', ['Italic Font', 'Fallback Font']],
+        ['literal', ['Regular Font', 'Fallback Font']],
+      ],
+    },
+  })
+  styleIn.glyphs = 'https://example.com/fonts/{fontstack}/{range}.pbf.gz'
+  const writer = new Writer(styleIn)
+  const smpPromise = streamToBuffer(writer.outputStream)
+  await writer.addTile(randomWebStream({ size: 1024 }), {
+    x: 0,
+    y: 0,
+    z: 0,
+    sourceId: 'maplibre',
+    format: 'mvt',
+  })
+  await writer.addGlyphs(randomWebStream({ size: 64 }), {
+    font: 'Italic Font',
+    range: '0-255',
+  })
+  await writer.addGlyphs(randomWebStream({ size: 64 }), {
+    font: 'Regular Font',
+    range: '0-255',
+  })
+  writer.finish()
+  const smp = await smpPromise
+  const reader = new Reader(await ZipReader.from(new BufferSource(smp)))
+  const styleOut = await reader.getStyle()
+  const layer = styleOut.layers.find((l) => l.id === 'labels')
+  expect(layer && 'layout' in layer).toBe(true)
+  const textFont = /** @type {any} */ (/** @type {any} */ (layer).layout)[
+    'text-font'
+  ]
+  expect(textFont[0], 'expression type preserved').toBe('match')
+  expect(textFont[3], 'park branch reduced to single font').toEqual([
+    'literal',
+    ['Italic Font'],
+  ])
+  expect(textFont[4], 'default branch reduced to single font').toEqual([
+    'literal',
+    ['Regular Font'],
+  ])
+})
+
+test('Writer transforms step expression text-font to single fonts', async () => {
+  const styleInUrl = new URL(
+    './fixtures/valid-styles/minimal.input.json',
+    import.meta.url,
+  )
+  const styleIn = await readJson(styleInUrl)
+  styleIn.layers.push({
+    id: 'labels',
+    type: 'symbol',
+    source: 'maplibre',
+    'source-layer': 'places',
+    layout: {
+      'text-field': '{name}',
+      'text-font': [
+        'step',
+        ['zoom'],
+        ['literal', ['Small Font', 'Fallback']],
+        10,
+        ['literal', ['Large Font', 'Fallback']],
+      ],
+    },
+  })
+  styleIn.glyphs = 'https://example.com/fonts/{fontstack}/{range}.pbf.gz'
+  const writer = new Writer(styleIn)
+  const smpPromise = streamToBuffer(writer.outputStream)
+  await writer.addTile(randomWebStream({ size: 1024 }), {
+    x: 0,
+    y: 0,
+    z: 0,
+    sourceId: 'maplibre',
+    format: 'mvt',
+  })
+  await writer.addGlyphs(randomWebStream({ size: 64 }), {
+    font: 'Small Font',
+    range: '0-255',
+  })
+  await writer.addGlyphs(randomWebStream({ size: 64 }), {
+    font: 'Large Font',
+    range: '0-255',
+  })
+  writer.finish()
+  const smp = await smpPromise
+  const reader = new Reader(await ZipReader.from(new BufferSource(smp)))
+  const styleOut = await reader.getStyle()
+  const layer = styleOut.layers.find((l) => l.id === 'labels')
+  expect(layer && 'layout' in layer).toBe(true)
+  const textFont = /** @type {any} */ (/** @type {any} */ (layer).layout)[
+    'text-font'
+  ]
+  expect(textFont[0], 'expression type preserved').toBe('step')
+  expect(textFont[2], 'default output reduced to single font').toEqual([
+    'literal',
+    ['Small Font'],
+  ])
+  expect(textFont[3], 'step threshold preserved').toBe(10)
+  expect(textFont[4], 'zoom >= 10 output reduced to single font').toEqual([
+    'literal',
+    ['Large Font'],
+  ])
+})
+
 /**
  *
  * @param {number} min

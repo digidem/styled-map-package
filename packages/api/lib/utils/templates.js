@@ -46,7 +46,8 @@ export function getResourceType(path) {
  * @param {string} path
  */
 export function getContentType(path) {
-  if (path.endsWith('.json')) return 'application/json; charset=utf-8'
+  if (path.endsWith('.json') || path.endsWith('.geojson'))
+    return 'application/json; charset=utf-8'
   if (path.endsWith('.pbf.gz') || path.endsWith('.pbf'))
     return 'application/x-protobuf'
   if (path.endsWith('.png')) return 'image/png'

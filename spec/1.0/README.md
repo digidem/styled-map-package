@@ -73,7 +73,7 @@ ZIP central directory entries SHOULD be ordered as follows for optimal read perf
 1. `VERSION`
 2. `style.json`
 3. Glyph files for Unicode range 0-255 for each font
-4. Tile files, ordered by zoom level ascending, interleaving sources at each zoom level
+4. Tile files, ordered by zoom level ascending — all tiles from all sources at zoom level N SHOULD appear before any tiles at zoom level N+1
 
 This ordering is a RECOMMENDATION, not a normative requirement. It allows a map renderer to begin displaying the map before the entire central directory has been read (SMP archives with many tiles can contain thousands of entries in the central directory that can take significant time to process).
 
@@ -115,7 +115,9 @@ Writers SHOULD use classic ZIP format when ZIP64 is not required. Readers MUST a
 
 The ZIP central directory is the authoritative source of entry metadata. Readers MUST use the central directory to locate entries and MUST NOT rely solely on local file headers.
 
-Writers MAY include multiple central directory records that reference the same underlying local file entry. This allows deduplication of identical data (e.g. tiles at different coordinates that contain the same data can share a single copy of the data in the archive while appearing as separate entries in the central directory).
+Writers MAY include multiple central directory records with different entry names that reference the same underlying local file header offset. This allows deduplication of identical data (e.g. tiles at different coordinates that contain the same data can share a single copy of the data in the archive while appearing as separate entries in the central directory). SMP readers MUST support archives that use this deduplication technique.
+
+> **Warning:** This deduplication technique causes a mismatch between the filename stored in the local file header and the filename in the aliased central directory entries. While the ZIP specification does not forbid this, many general-purpose ZIP tools do not handle it correctly. macOS Finder fails to expand such archives, Info-ZIP `unzip` emits warnings, and strict readers such as `yauzl` (Node.js) and Go's `archive/zip` may reject the entries. Writers that need the resulting archive to be compatible with general-purpose ZIP tools SHOULD NOT use this technique.
 
 ## 4. style.json
 
@@ -123,7 +125,7 @@ Writers MAY include multiple central directory records that reference the same u
 
 The `style.json` file MUST be a UTF-8 encoded, strictly valid JSON document (no comments, no trailing commas) conforming to the [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/) version 8.
 
-Unknown properties (properties not defined by the MapLibre Style Specification or this specification) MUST be preserved by writers and MAY be ignored by readers.
+Unknown properties (properties not defined by the MapLibre Style Specification or this specification) MUST be preserved by writers and MAY be ignored by readers. In particular, the `metadata` object and all of its properties MUST be preserved when round-tripping a style through a writer and reader, so that third-party tools can store their own metadata alongside SMP-specific properties.
 
 ### 4.2 SMP URI Scheme
 
@@ -142,7 +144,7 @@ The URI prefix `smp://maps.v1/` MUST be used for all internal resource reference
 The following rules define how an SMP URI maps to a ZIP entry name:
 
 1. The prefix `smp://maps.v1/` maps to the root of the ZIP archive. The remainder of the URI after the prefix is the ZIP entry name. For example, `smp://maps.v1/fonts/Open Sans Regular/0-255.pbf.gz` maps to the ZIP entry `fonts/Open Sans Regular/0-255.pbf.gz`.
-2. SMP URIs in `style.json` MUST NOT contain percent-encoded characters. Writers MUST store paths as literal UTF-8 strings.
+2. SMP URIs in `style.json` MUST NOT contain percent-encoded characters. Writers MUST store paths as literal UTF-8 strings. For example, `smp://maps.v1/fonts/Open Sans Regular/0-255.pbf.gz` is correct; `smp://maps.v1/fonts/Open%20Sans%20Regular/0-255.pbf.gz` is non-conforming. Mapping libraries such as MapLibre GL will percent-encode these paths when making HTTP requests, but the stored URI and corresponding ZIP entry name MUST use the literal, unencoded path.
 3. Paths MUST be treated as case-sensitive.
 4. A trailing slash in the URI MUST be treated as part of the path. Writers SHOULD avoid trailing slashes in SMP URIs.
 5. SMP URIs MUST NOT resolve to paths containing `..` segments or absolute paths.
@@ -184,8 +186,19 @@ The `style.json` `metadata` object MAY contain the following SMP-specific proper
 #### 4.3.3 `smp:sourceFolders` (OPTIONAL)
 
 - Type: Object (string to string mapping)
-- Maps source IDs (as they appear in `style.sources`) to their folder names within the archive.
+- Maps source IDs (as they appear in `style.sources`) to their folder path within the archive (relative to the archive root). The folder path is an opaque string determined by the writer implementation — readers MUST NOT assume a particular folder structure (see [Section 3](#3-archive-structure)).
 - Implementations MAY use this as a convenience for mapping source IDs to archive paths without parsing tile URL templates.
+
+Example:
+
+```json
+"smp:sourceFolders": {
+  "openmaptiles": "s/0",
+  "hillshade": "s/1"
+}
+```
+
+This indicates that tiles for the `openmaptiles` source are stored under `s/0/` and tiles for `hillshade` are stored under `s/1/`. The `s/` prefix and the subfolder names (`0`, `1`) are both implementation-defined — other writers MAY use different paths.
 
 ### 4.4 Additional Style Properties
 
@@ -202,11 +215,11 @@ The following [MapLibre source types](https://maplibre.org/maplibre-style-spec/s
 
 Additionally, `geojson` sources are supported (see [Section 8](#8-geojson-sources)).
 
-Other source types (e.g., `raster-dem`, `image`, `video`) are not supported by this specification.
+Other source types (e.g., `raster-dem`, `image`, `video`) are not supported by this specification version. Support for `raster-dem` sources (terrain/hillshade) is planned for a future version.
 
 ### 5.2 Tile File Paths
 
-Tile file paths MUST match the URL template specified in the source's `tiles` property in `style.json` (see [Section 5.5](#55-tile-url-template)), with the `{z}`, `{x}`, and `{y}` placeholders replaced by actual tile coordinates.
+Tile file paths MUST match the URL template specified in the source's `tiles` property in `style.json` (see [Section 5.5](#55-tile-url-template)), with the `{z}`, `{x}`, and `{y}` placeholders replaced by actual tile coordinates using the XYZ scheme (see [Section 5.4](#54-tile-coordinate-scheme)).
 
 The folder structure for tiles is determined by the implementation. It is RECOMMENDED that tile path prefixes are kept as short as possible, because the file path is stored in the ZIP central directory record for every tile, and shorter paths reduce the overall archive size. It is RECOMMENDED that the source subfolder name matches the source ID in `style.json`.
 
@@ -226,6 +239,8 @@ Vector tiles (`.mvt`, `.pbf`) SHOULD be stored gzip-compressed (using the `.mvt.
 
 Files with a `.mvt` or `.pbf` extension (without `.gz`) MUST NOT contain gzip-compressed data. Only the `.mvt.gz` and `.pbf.gz` extensions indicate gzip compression.
 
+Tiles with no meaningful content (e.g. ocean tiles) are still valid and MUST be present if they fall within the source's bounds and zoom range (see [Section 5.7](#57-tile-bounds-and-completeness)). An "empty" vector tile still contains valid protobuf headers, and an "empty" raster tile is a valid image file (e.g. a single-color PNG). The central directory deduplication technique described in [Section 3.6](#36-central-directory) can be used to store identical tiles efficiently without duplicating their data.
+
 ### 5.3 Tile Format Consistency
 
 All tiles within a single source MUST use the same format. A source MUST NOT contain tiles of mixed formats (e.g., both `.png` and `.jpg`).
@@ -233,6 +248,8 @@ All tiles within a single source MUST use the same format. A source MUST NOT con
 ### 5.4 Tile Coordinate Scheme
 
 Tile coordinates MUST use the [XYZ / Slippy Map](https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames) tile naming scheme, where the origin (`x=0, y=0`) is at the top-left (north-west) corner of the map. This is the default scheme used by MapLibre's `tiles` property.
+
+Sources MUST NOT use the `scheme` property with the value `"tms"`. If the original style contains a source with `"scheme": "tms"`, the writer MUST convert tile Y coordinates from TMS to XYZ using the formula `y_xyz = 2^z - y_tms - 1`, store the tiles using the converted XYZ coordinates, and remove the `scheme` property from the source.
 
 ### 5.5 Tile URL Template
 
@@ -263,7 +280,7 @@ Tile sources MUST NOT include a `url` property. If the original style references
 
 ### 5.7 Tile Bounds and Completeness
 
-The `bounds` property of a tile source MUST reflect the geographic extent of tile data actually present in the SMP file. It SHOULD be computed as the union of the bounding boxes of all tiles at the source's maximum zoom level.
+The `bounds` property of a tile source MUST reflect the geographic extent of available tile data, as defined by the [TileJSON specification](https://github.com/mapbox/tilejson-spec). It represents the bounding box within which tile data is present and MAY be used by clients to limit requests to this region.
 
 All tiles at zoom levels between `minzoom` and `maxzoom` (inclusive) that intersect the source's `bounds` MUST be present in the archive.
 
@@ -277,7 +294,7 @@ Each glyph file corresponds to a Unicode range in the format `{start}-{end}` whe
 
 - `start` is a multiple of 256 (0, 256, 512, ...)
 - `end` is `start + 255`
-- The full range is 0-255 through 65280-65535
+- The full range is 0-255 through 65280-65535, covering the Unicode [Basic Multilingual Plane](<https://en.wikipedia.org/wiki/Plane_(Unicode)#Basic_Multilingual_Plane>) (U+0000 to U+FFFF) in 256 files per font stack. Characters outside the BMP (U+10000 and above) are not covered by this glyph range scheme.
 
 ### 6.2 Glyph Encoding
 
@@ -317,7 +334,11 @@ fonts/Open Sans Regular,Arial Unicode MS Regular/0-255.pbf.gz
 
 The glyph data in these files MAY be from any of the fonts in the stack. It is RECOMMENDED to use the first font in the stack.
 
-### 6.5 Font Coverage
+### 6.5 Data-Driven Font Stacks
+
+The `text-font` property in MapLibre GL supports [expressions](https://maplibre.org/maplibre-style-spec/expressions/) that can produce different font stacks depending on feature data (e.g. `["match", ["get", "type"], "park", ["literal", ["Italic Font"]], ["literal", ["Regular Font"]]]`). Writers MUST evaluate all possible output values of `text-font` expressions and include glyph files for every font stack that the expression can produce. If the set of possible values cannot be statically determined, the writer SHOULD include glyphs for all fonts referenced in the expression.
+
+### 6.6 Font Coverage
 
 The SMP file MUST include glyph files for every `{fontstack}` value that MapLibre GL will request based on the `text-font` properties in the style. All Unicode ranges used by text content in the vector tile data MUST be included for each font stack. Including all 256 Unicode ranges (0-255 through 65280-65535) is RECOMMENDED to ensure complete glyph coverage.
 
@@ -334,7 +355,7 @@ For each sprite referenced in `style.json`, the following files MUST be present:
 {base_path}.png     - Sprite sheet image (1x)
 ```
 
-The following files are OPTIONAL but RECOMMENDED:
+Implementations SHOULD also include high-DPI variants:
 
 ```
 {base_path}@2x.json  - Sprite index (2x)
@@ -390,14 +411,14 @@ GeoJSON sources with inline data (where the `data` property is a GeoJSON object)
 
 GeoJSON sources that reference an external URL (where the `data` property is a string URL) SHOULD have their data fetched and stored as a file in the archive. The source's `data` property MUST be replaced with an SMP URI pointing to the stored file. It is RECOMMENDED that GeoJSON files are stored alongside tile data (e.g. under `s/`) in a subfolder named with the source ID.
 
-GeoJSON data files MUST use the `.json` extension (not `.geojson`) and SHOULD NOT be gzip-compressed.
+GeoJSON data files MUST use either the `.json` or `.geojson` extension and SHOULD NOT be gzip-compressed.
 
 Example:
 
 ```json
 {
   "type": "geojson",
-  "data": "smp://maps.v1/s/my-source/data.json"
+  "data": "smp://maps.v1/s/my-source/data.geojson"
 }
 ```
 
@@ -430,14 +451,14 @@ This section is informative and provides guidance for implementations that serve
 
 When serving resources over HTTP, implementations SHOULD set the `Content-Type` header according to the file extension:
 
-| Extension          | Content-Type                         |
-| ------------------ | ------------------------------------ |
-| `.json`            | `application/json; charset=utf-8`    |
-| `.mvt.gz` / `.mvt` | `application/vnd.mapbox-vector-tile` |
-| `.pbf.gz` / `.pbf` | `application/x-protobuf`             |
-| `.png`             | `image/png`                          |
-| `.jpg`             | `image/jpeg`                         |
-| `.webp`            | `image/webp`                         |
+| Extension            | Content-Type                         |
+| -------------------- | ------------------------------------ |
+| `.json` / `.geojson` | `application/json; charset=utf-8`    |
+| `.mvt.gz` / `.mvt`   | `application/vnd.mapbox-vector-tile` |
+| `.pbf.gz` / `.pbf`   | `application/x-protobuf`             |
+| `.png`               | `image/png`                          |
+| `.jpg`               | `image/jpeg`                         |
+| `.webp`              | `image/webp`                         |
 
 ### 10.2 Content-Encoding
 
@@ -445,7 +466,13 @@ Resources stored with gzip compression (`.mvt.gz`, `.pbf.gz`) SHOULD be served w
 
 Resources stored without gzip compression (`.mvt`, `.pbf`) do not require a `Content-Encoding` header. However, mapping libraries typically expect vector tiles and glyphs to be gzip-encoded, so serving implementations MAY need to compress these resources on the fly.
 
-### 10.3 Percent-Decoding Request Paths
+### 10.3 Content-Length
+
+Serving implementations SHOULD set the `Content-Length` header on responses. For resources stored without gzip compression, the content length is the uncompressed entry size from the ZIP central directory. For gzip-compressed resources served with `Content-Encoding: gzip`, the content length is the compressed entry size.
+
+HTTP range requests are not expected for SMP resource serving and implementations need not support them.
+
+### 10.4 Percent-Decoding Request Paths
 
 Mapping libraries such as [MapLibre GL](https://maplibre.org/) percent-encode characters in request URLs per [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986#section-2.1). For example, a font named `Open Sans Regular` will be requested as `Open%20Sans%20Regular` in the URL path.
 
@@ -461,7 +488,7 @@ Readers MUST reject ZIP entries with names containing `..` path segments or abso
 
 SMP files may contain a large number of entries (hundreds of thousands of tiles). Readers SHOULD enforce limits on:
 
-- **Maximum number of entries** processed from the central directory.
+- **Maximum number of entries** processed from the central directory. A RECOMMENDED default limit is 500,000 entries, which is sufficient for a global dataset up to zoom level 9 (approximately 350,000 tiles plus fonts and sprites).
 - **Maximum memory usage** when decompressing tiles, glyphs, or other resources.
 - **Maximum uncompressed size** per entry, to guard against decompression bombs (entries with small compressed size but very large uncompressed size).
 
@@ -469,6 +496,10 @@ Writers MAY also enforce limits on the number or size of entries they produce.
 
 ## 12. Glossary
 
+- **SMP file** — A Styled Map Package: a ZIP archive conforming to this specification, containing a map style and its associated resources for offline rendering.
+- **Writer** — An implementation that creates SMP files by assembling a style document and its resources into a conforming ZIP archive.
+- **Reader** — An implementation that opens SMP files and extracts resources for rendering or serving.
+- **Serving implementation** — An implementation that serves SMP resources over HTTP, translating SMP URIs to HTTP URLs and setting appropriate response headers. See [Section 10](#10-serving-resources-informative).
 - **SMP URI** — A URI using the scheme `smp://maps.v1/{path}` that references a file within the SMP archive. See [Section 4.2](#42-smp-uri-scheme).
 - **Tile template** — A URL template containing `{z}`, `{x}`, and `{y}` placeholders that is expanded to produce tile file paths. See [Section 5.5](#55-tile-url-template).
 - **Font stack** — An ordered list of font names specified in a `text-font` property. [MapLibre GL](https://maplibre.org/) joins the names with commas to form the `{fontstack}` value in glyph URL requests. See [Section 6.4](#64-font-stacks).
@@ -477,7 +508,17 @@ Writers MAY also enforce limits on the number or size of entries they produce.
 - **ZIP central directory** — The index at the end of a ZIP archive listing all entries and their metadata. Readers MUST use this as the source of truth. See [Section 3.6](#36-central-directory).
 - **ZIP64** — An extension to the ZIP format that supports archives and entries larger than 4 GiB and more than 65,535 entries. See [Section 3.5](#35-zip64).
 
-## 13. Normative References
+## 13. Specification Versioning
+
+This specification follows [Semantic Versioning](https://semver.org/) principles adapted for a file format:
+
+- **Patch versions** (e.g. `1.0.0` → `1.0.1`) are editorial changes: clarifications, typo fixes, and non-normative additions that do not alter conformance requirements. The `VERSION` file in the archive is unaffected.
+- **Minor versions** (e.g. `1.0` → `1.1`) add new OPTIONAL features or relax existing requirements. Files produced under a minor version are backwards-compatible: a reader supporting `1.0` MUST be able to read a `1.1` file (it MAY ignore new features). The `VERSION` file reflects the minor version (e.g. `1.1`).
+- **Major versions** (e.g. `1.x` → `2.0`) introduce breaking changes. A reader supporting only major version `1` MUST reject files with major version `2`. Major version changes also require a new SMP URI version (e.g. `smp://maps.v2/`).
+
+Each specification version is published under `spec/{MAJOR}.{MINOR}/`. The specification source is the authoritative reference; a changelog SHOULD be maintained alongside each version.
+
+## 14. Normative References
 
 - [ZIP File Format Specification (APPNOTE.TXT)](https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT)
 - [MapLibre Style Specification v8](https://maplibre.org/maplibre-style-spec/)

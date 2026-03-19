@@ -33,9 +33,9 @@ import {
  */
 /**
  * @typedef {object} TileInfo
- * @property {number} z
- * @property {number} x
- * @property {number} y
+ * @property {number} z Zoom level
+ * @property {number} x Tile column (XYZ scheme)
+ * @property {number} y Tile row (XYZ scheme, origin at top-left). If your source uses TMS, convert with {@link import('./utils/geo.js').tmsToXyzY} before passing.
  * @property {string} sourceId
  * @property {TileFormat} [format]
  */
@@ -233,7 +233,7 @@ export class Writer {
       case 'raster':
       case 'vector':
         smpSource = {
-          ...excludeKeys(source, ['tiles', 'url']),
+          ...excludeKeys(source, ['tiles', 'url', 'scheme']),
           ...tileSourceOverrides,
         }
         break
@@ -263,7 +263,9 @@ export class Writer {
   }
 
   /**
-   * Add a tile to the styled map package
+   * Add a tile to the styled map package. Coordinates must use the XYZ scheme
+   * (origin at top-left / north-west). If your tiles use TMS coordinates,
+   * convert the Y value first with `tmsToXyzY({ y, z })` from `utils/geo.js`.
    *
    * @param {Source} tileData
    * @param {TileInfo} opts
@@ -486,7 +488,8 @@ export class Writer {
     /** @type {Record<string, string>} */
     metadata['smp:sourceFolders'] = {}
     for (const [sourceId, { encodedSourceId }] of this.#sources) {
-      metadata['smp:sourceFolders'][sourceId] = encodedSourceId
+      metadata['smp:sourceFolders'][sourceId] =
+        SOURCES_FOLDER + '/' + encodedSourceId
     }
     this.#style.zoom = Math.max(0, this.#getMaxZoom() - 2)
   }

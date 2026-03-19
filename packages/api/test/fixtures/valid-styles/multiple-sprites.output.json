@@ -117,7 +117,7 @@
     ],
     "smp:maxzoom": 0,
     "smp:sourceFolders": {
-      "openmaptiles": "0"
+      "openmaptiles": "s/0"
     }
   },
   "center": [

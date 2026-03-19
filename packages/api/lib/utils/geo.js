@@ -75,6 +75,16 @@ export function unionBBox(bboxes) {
   return [w, s, e, n]
 }
 
+/**
+ * Convert a TMS Y coordinate to an XYZ Y coordinate.
+ *
+ * @param {{ y: number, z: number }} tile
+ * @returns {number} The XYZ Y coordinate
+ */
+export function tmsToXyzY({ y, z }) {
+  return Math.pow(2, z) - y - 1
+}
+
 /** @param {{ x: number, z: number }} opts */
 function tile2lon({ x, z }) {
   return (x / Math.pow(2, z)) * 360 - 180

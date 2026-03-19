@@ -86,8 +86,8 @@
     ],
     "smp:maxzoom": 16,
     "smp:sourceFolders": {
-      "crimea": "0",
-      "maplibre": "1"
+      "crimea": "s/0",
+      "maplibre": "s/1"
     }
   }
 }
