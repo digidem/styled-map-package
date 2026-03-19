@@ -1567,7 +1567,7 @@
     ],
     "smp:maxzoom": 16,
     "smp:sourceFolders": {
-      "crimea": "0"
+      "crimea": "s/0"
     }
   }
 }

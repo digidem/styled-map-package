@@ -63,6 +63,7 @@
   "sources": {
     "maplibre": {
       "type": "vector",
+      "scheme": "xyz",
       "minzoom": 0,
       "maxzoom": 5,
       "bounds": [
@@ -86,7 +87,7 @@
     ],
     "smp:maxzoom": 5,
     "smp:sourceFolders": {
-      "maplibre": "0"
+      "maplibre": "s/0"
     }
   }
 }

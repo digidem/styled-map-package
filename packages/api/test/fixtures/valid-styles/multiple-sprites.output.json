@@ -4,6 +4,7 @@
   "sources": {
     "openmaptiles": {
       "type": "vector",
+      "scheme": "xyz",
       "minzoom": 0,
       "maxzoom": 0,
       "bounds": [
@@ -117,7 +118,7 @@
     ],
     "smp:maxzoom": 0,
     "smp:sourceFolders": {
-      "openmaptiles": "0"
+      "openmaptiles": "s/0"
     }
   },
   "center": [

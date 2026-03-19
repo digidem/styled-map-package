@@ -63,6 +63,7 @@
   "sources": {
     "maplibre": {
       "type": "vector",
+      "scheme": "xyz",
       "minzoom": 0,
       "maxzoom": 0,
       "bounds": [
@@ -86,8 +87,8 @@
     ],
     "smp:maxzoom": 16,
     "smp:sourceFolders": {
-      "crimea": "0",
-      "maplibre": "1"
+      "crimea": "s/0",
+      "maplibre": "s/1"
     }
   }
 }

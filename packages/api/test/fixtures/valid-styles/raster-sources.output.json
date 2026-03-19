@@ -4,6 +4,7 @@
     "png-tiles": {
       "type": "raster",
       "tileSize": 256,
+      "scheme": "xyz",
       "minzoom": 0,
       "maxzoom": 0,
       "bounds": [
@@ -19,6 +20,7 @@
     "jpg-tiles": {
       "type": "raster",
       "tileSize": 256,
+      "scheme": "xyz",
       "minzoom": 0,
       "maxzoom": 0,
       "bounds": [
@@ -62,8 +64,8 @@
     ],
     "smp:maxzoom": 0,
     "smp:sourceFolders": {
-      "png-tiles": "0",
-      "jpg-tiles": "1"
+      "png-tiles": "s/0",
+      "jpg-tiles": "s/1"
     }
   }
 }
