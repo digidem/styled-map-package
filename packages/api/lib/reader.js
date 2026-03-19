@@ -47,18 +47,28 @@ class Entries {
   /** @type {unknown} */
   #error
 
-  /** @param {Promise<import('@gmaclennan/zip-reader').ZipReader>} zipPromise */
-  constructor(zipPromise) {
+  /**
+   * @param {Promise<import('@gmaclennan/zip-reader').ZipReader>} zipPromise
+   * @param {{ maxEntries: number }} options
+   */
+  constructor(zipPromise, { maxEntries }) {
     this.#readyPromise = (async () => {
       try {
         if (this.#closing) return
         const zip = await zipPromise
         if (this.#closing) return
+        let count = 0
         for await (const entry of zip) {
           if (this.#closing) return
-          this.#entries.set(entry.name, entry)
-          this.#deferredEntries.get(entry.name)?.resolve(entry)
-          this.#deferredEntries.delete(entry.name)
+          if (++count > maxEntries) {
+            throw new Error(
+              `SMP archive exceeds maximum entry count of ${maxEntries}`,
+            )
+          }
+          const normalizedName = entry.name.normalize('NFC')
+          this.#entries.set(normalizedName, entry)
+          this.#deferredEntries.get(normalizedName)?.resolve(entry)
+          this.#deferredEntries.delete(normalizedName)
         }
       } catch (error) {
         this.#error = error
@@ -85,6 +95,7 @@ class Entries {
 
   /** @param {string} path */
   async get(path) {
+    path = path.normalize('NFC')
     if (this.#entries.has(path)) {
       return this.#entries.get(path)
     }
@@ -155,6 +166,16 @@ async function streamToJson(readable) {
  */
 
 /**
+ * @typedef {object} ReaderOptions
+ * @property {number} [maxEntries=500_000] Maximum number of ZIP entries to
+ *   process. Exceeding this limit throws an error during `opened()`. Default is
+ *   500,000 (~a global z9 tileset).
+ * @property {number} [maxResourceSize=20 * 1024 * 1024] Maximum uncompressed
+ *   size in bytes for a single resource returned by `getResource()`. Default is
+ *   20 MiB.
+ */
+
+/**
  * A low-level reader for styled map packages. Returns resources in the package
  * as readable streams, for serving over HTTP for example.
  */
@@ -164,11 +185,15 @@ export class Reader {
   #closePromise
   /** @type {import('@gmaclennan/zip-reader/file-source').FileSource | null} */
   #fileSource = null
+  #maxResourceSize
 
   /**
    * @param {string | import('@gmaclennan/zip-reader').ZipReader} filepathOrZip Path to styled map package (`.styledmap`) file, or a ZipReader instance
+   * @param {ReaderOptions} [options]
    */
-  constructor(filepathOrZip) {
+  constructor(filepathOrZip, options = {}) {
+    const { maxEntries = 500_000, maxResourceSize = 20 * 1024 * 1024 } = options
+    this.#maxResourceSize = maxResourceSize
     /** @type {Promise<import('@gmaclennan/zip-reader').ZipReader>} */
     let zipPromise
     if (typeof filepathOrZip === 'string') {
@@ -186,7 +211,7 @@ export class Reader {
       zipPromise = Promise.resolve(filepathOrZip)
     }
     zipPromise.catch(noop)
-    this.#entries = new Entries(zipPromise)
+    this.#entries = new Entries(zipPromise, { maxEntries })
     // Close the internally-opened file source on failure to avoid FD leaks.
     // Uses this.close() so that #closePromise is set, ensuring any subsequent
     // reader.close() call awaits the same cleanup rather than racing with it.
@@ -242,6 +267,13 @@ export class Reader {
       if ('tiles' in source && source.tiles) {
         source.tiles = source.tiles.map((tile) => getUrl(tile, baseUrl))
       }
+      if (
+        'data' in source &&
+        typeof source.data === 'string' &&
+        source.data.startsWith(URI_BASE)
+      ) {
+        source.data = getUrl(source.data, baseUrl)
+      }
     }
     // Hard to get this type-safe without a validation function. Instead we
     // trust the Writer and the tests for now.
@@ -274,6 +306,11 @@ export class Reader {
     }
     const entry = await this.#entries.get(path)
     if (!entry) throw new ENOENT(path)
+    if (entry.uncompressedSize > this.#maxResourceSize) {
+      throw new Error(
+        `Resource ${path} exceeds maximum size of ${this.#maxResourceSize} bytes (${entry.uncompressedSize} bytes)`,
+      )
+    }
     const resourceType = getResourceType(path)
     const contentType = getContentType(path)
     const stream = entry.readable()

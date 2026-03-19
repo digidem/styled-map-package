@@ -141,12 +141,13 @@ The URI prefix `smp://maps.v1/` MUST be used for all internal resource reference
 
 The following rules define how an SMP URI maps to a ZIP entry name:
 
-1. The prefix `smp://maps.v1/` maps to the root of the ZIP archive.
-2. After removing the prefix, each path segment MUST be [percent-decoded](https://www.rfc-editor.org/rfc/rfc3986#section-2.1) using UTF-8 to produce the ZIP entry name. For example, `smp://maps.v1/fonts/Open%20Sans%20Regular/0-255.pbf.gz` maps to the ZIP entry `fonts/Open Sans Regular/0-255.pbf.gz`.
-3. Percent-encoded slashes (`%2F`) MUST be decoded to `/`, forming part of the path structure.
-4. Paths MUST be treated as case-sensitive.
-5. A trailing slash in the URI MUST be treated as part of the path. Writers SHOULD avoid trailing slashes in SMP URIs.
-6. Implementations MUST reject SMP URIs that, after percent-decoding, resolve to paths containing `..` segments or absolute paths.
+1. The prefix `smp://maps.v1/` maps to the root of the ZIP archive. The remainder of the URI after the prefix is the ZIP entry name. For example, `smp://maps.v1/fonts/Open Sans Regular/0-255.pbf.gz` maps to the ZIP entry `fonts/Open Sans Regular/0-255.pbf.gz`.
+2. SMP URIs in `style.json` MUST NOT contain percent-encoded characters. Writers MUST store paths as literal UTF-8 strings.
+3. Paths MUST be treated as case-sensitive.
+4. A trailing slash in the URI MUST be treated as part of the path. Writers SHOULD avoid trailing slashes in SMP URIs.
+5. SMP URIs MUST NOT resolve to paths containing `..` segments or absolute paths.
+
+> **Note:** When serving SMP resources over HTTP, the mapping library (e.g. MapLibre GL) will percent-encode characters such as spaces in the request URL per [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986#section-2.1). Serving implementations MUST percent-decode the request path before looking up the corresponding ZIP entry. See [Section 10](#10-serving-resources-informative) for details.
 
 #### 4.2.2 Referenced Properties
 
@@ -443,6 +444,12 @@ When serving resources over HTTP, implementations SHOULD set the `Content-Type` 
 Resources stored with gzip compression (`.mvt.gz`, `.pbf.gz`) SHOULD be served with the HTTP header `Content-Encoding: gzip`. This allows clients to transparently decompress the data.
 
 Resources stored without gzip compression (`.mvt`, `.pbf`) do not require a `Content-Encoding` header. However, mapping libraries typically expect vector tiles and glyphs to be gzip-encoded, so serving implementations MAY need to compress these resources on the fly.
+
+### 10.3 Percent-Decoding Request Paths
+
+Mapping libraries such as [MapLibre GL](https://maplibre.org/) percent-encode characters in request URLs per [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986#section-2.1). For example, a font named `Open Sans Regular` will be requested as `Open%20Sans%20Regular` in the URL path.
+
+Serving implementations MUST percent-decode the request path using UTF-8 before looking up the corresponding ZIP entry name. Since SMP URIs in `style.json` store paths as literal UTF-8 (see [Section 4.2.1](#421-uri-to-path-mapping)), the decoded request path will match the ZIP entry name directly.
 
 ## 11. Security Considerations
 

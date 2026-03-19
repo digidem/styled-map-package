@@ -498,6 +498,7 @@ export class Writer {
    * @returns {Promise<void>}
    */
   async #append(source, { name, store = false }) {
+    name = name.normalize('NFC')
     if (this.#addedFiles.has(name)) {
       throw new Error(`${name} already added`)
     }
