@@ -136,3 +136,29 @@ export function replaceVariables(template, variables) {
     return varName in variables ? String(variables[varName]) : match
   })
 }
+
+/**
+ * Inverse of {@link replaceVariables}. Converts a template string into a RegExp
+ * that captures the placeholder values. Only placeholders present in the
+ * `placeholders` map become named capture groups; unknown placeholders are
+ * treated as literal text and escaped.
+ *
+ * @param {string} template - The template string with `{name}` placeholders.
+ * @param {Record<string, string>} placeholders - Map of placeholder
+ *   name → regex pattern (e.g. `{ z: '\\d+' }`).
+ * @returns {RegExp} A RegExp with named capture groups for each known placeholder.
+ */
+export function templateToRegex(template, placeholders) {
+  const parts = template.split(/\{(\w+)\}/)
+  let pattern = ''
+  for (let i = 0; i < parts.length; i++) {
+    if (i % 2 === 0) {
+      pattern += parts[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    } else if (parts[i] in placeholders) {
+      pattern += `(?<${parts[i]}>${placeholders[parts[i]]})`
+    } else {
+      pattern += `\\{${parts[i]}\\}`
+    }
+  }
+  return new RegExp(`^${pattern}$`)
+}
