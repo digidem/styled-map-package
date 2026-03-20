@@ -97,6 +97,16 @@
         "default": "./dist/fallbacks.cjs"
       }
     },
+    "./validator": {
+      "import": {
+        "types": "./dist/validator.d.ts",
+        "default": "./dist/validator.js"
+      },
+      "require": {
+        "types": "./dist/validator.d.cts",
+        "default": "./dist/validator.cjs"
+      }
+    },
     "./utils/mapbox": {
       "import": {
         "types": "./dist/utils/mapbox.d.ts",

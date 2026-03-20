@@ -99,9 +99,12 @@ const stream = download({
   styleUrl: 'https://demotiles.maplibre.org/style.json',
   bbox: [-180, -80, 180, 80],
   maxzoom: 5,
+  skipLocalGlyphs: true, // skip CJK/Hangul/Kana ranges rendered locally by MapLibre
 })
 // Pipe the ReadableStream to a file
 ```
+
+The `skipLocalGlyphs` option skips downloading glyph ranges that MapLibre GL renders client-side via [`localIdeographFontFamily`](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/) (CJK, Hangul, Kana, Yi, and Halfwidth/Fullwidth Forms — 163 of 256 ranges). This significantly reduces download size for styles that use these scripts.
 
 ### Converting from MBTiles
 
@@ -134,7 +137,50 @@ const stream = fromMBTiles(buffer)
 | `styled-map-package-api/style-downloader` | `StyleDownloader` — downloads styles, sprites, and glyphs         |
 | `styled-map-package-api/tile-downloader`  | `downloadTiles()` — downloads tile data                           |
 | `styled-map-package-api/from-mbtiles`     | `fromMBTiles()` — convert MBTiles to SMP stream                   |
+| `styled-map-package-api/validator`        | `validate()` — validate `.smp` files against the spec             |
 | `styled-map-package-api/utils/mapbox`     | Mapbox URL detection and API utilities                            |
+
+### Validating an SMP file
+
+```js
+import { validate } from 'styled-map-package-api/validator'
+
+const result = await validate('path/to/map.smp')
+
+if (!result.usable) {
+  console.error('File cannot be opened')
+} else if (!result.valid) {
+  console.warn('File has issues but is usable')
+}
+
+for (const issue of result.issues) {
+  console.log(`[${issue.severity}] ${issue.message}`)
+}
+```
+
+The validator checks an `.smp` file against the [SMP specification](../../spec/1.0/) and returns structured issues. Each issue has:
+
+- **`kind`** — `'error'` (spec MUST violation) or `'warning'` (SHOULD/RECOMMENDED)
+- **`severity`** — practical impact on the reader/renderer:
+  - `'fatal'` — the reader will fail to open the file
+  - `'rendering'` — the map opens but content will be visibly broken (missing tiles, glyphs, sprites)
+  - `'spec'` — non-compliance that doesn't affect practical use
+- **`type`** — stable identifier for programmatic filtering (e.g. `'missing_tiles'`, `'incomplete_font_glyphs'`)
+- **`message`** — human-readable description
+- **`path`** — location context (e.g. `'sources.test.tiles'`, `'glyphs'`)
+
+The result includes two convenience booleans:
+
+- **`valid`** — `true` when there are no errors (spec-compliant)
+- **`usable`** — `true` when there are no fatal issues (the file can be opened)
+
+Accepts a file path (Node.js) or a `ZipReader` instance (browser). Options:
+
+```js
+const result = await validate('map.smp', {
+  maxEntries: 500_000, // max ZIP entries before aborting (default: 500,000)
+})
+```
 
 ### Browser support
 

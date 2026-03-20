@@ -34,6 +34,12 @@ Preview in a browser:
 smp view demotiles.smp --open
 ```
 
+Validate a `.smp` file:
+
+```sh
+smp validate map.smp
+```
+
 Or use the API programmatically:
 
 ```sh

@@ -28,6 +28,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { LOCAL_GLYPH_RANGES } from '../packages/api/lib/utils/style.js'
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
 const OUTPUT_DIR = path.join(ROOT, 'packages', 'glyphs', 'fixtures', 'glyphs')
@@ -39,16 +41,30 @@ const GO_NOTO_URL =
 // Empty ranges from build_pbf_glyphs are ~29 bytes (just the protobuf wrapper).
 const MIN_GLYPH_SIZE = 50
 
-// Ranges to EXCLUDE from the output because MapLibre renders them client-side
-// via `localIdeographFontFamily` (TinySDF), or because they are uncommon.
-// Excluded ranges are served as empty PBFs by the fallback handler.
-const EXCLUDE_RANGES = [
-  [11776, 13055], // CJK Radicals, Kangxi, Kana Extensions
-  [13056, 40959], // CJK Compatibility, Extension A, CJK Unified Ideographs
-  [44032, 55295], // Hangul Syllables
-  [63744, 64255], // CJK Compatibility Ideographs
-  [64512, 65023], // Arabic Presentation Forms B (uncommon)
+// Additional ranges to exclude from the fallback glyph package because they
+// contain legacy/uncommon codepoints rarely used in map labels. These are NOT
+// rendered locally by MapLibre — they are simply omitted as a size optimization
+// for the fallback package. The fallback handler serves empty PBFs for these.
+const UNCOMMON_RANGES = [
+  [0xfc00, 0xfe00], // Arabic Presentation Forms A (legacy precomposed ligatures)
 ]
+
+/**
+ * Check whether a PBF glyph range should be excluded from the fallback
+ * glyph package — either because MapLibre renders it client-side, or because
+ * it contains uncommon codepoints not worth shipping.
+ * @param {number} rangeStart
+ */
+function isExcludedRange(rangeStart) {
+  return (
+    LOCAL_GLYPH_RANGES.some(
+      ([start, end]) => rangeStart >= start && rangeStart < end,
+    ) ||
+    UNCOMMON_RANGES.some(
+      ([start, end]) => rangeStart >= start && rangeStart < end,
+    )
+  )
+}
 
 /**
  * Download a file from a URL to a local path, following redirects.
@@ -149,9 +165,7 @@ async function main() {
       const data = fs.readFileSync(src)
       const rangeStart = parseInt(filename.split('-')[0])
 
-      const excluded = EXCLUDE_RANGES.some(
-        ([start, end]) => rangeStart >= start && rangeStart <= end,
-      )
+      const excluded = isExcludedRange(rangeStart)
 
       if (excluded || data.length <= MIN_GLYPH_SIZE) {
         skippedCount++
