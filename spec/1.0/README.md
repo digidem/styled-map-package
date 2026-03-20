@@ -153,16 +153,16 @@ The following rules define how an SMP URI maps to a ZIP entry name:
 
 #### 4.2.2 Referenced Properties
 
-The `style.json` SHOULD NOT contain references to external URLs. All resource URLs SHOULD use SMP URIs pointing to resources inside the archive.
+The `style.json` MUST NOT contain resource URLs that reference external services. All resource URLs MUST use SMP URIs pointing to resources inside the archive. Properties that are absent (e.g. a style with no `glyphs` or `sprite` property) do not violate this requirement.
 
-The following `style.json` properties MUST use SMP URIs when referencing archive resources:
+The following `style.json` properties, when present, MUST use SMP URIs:
 
 - `glyphs` — glyph URL template
 - `sprite` — sprite URL (string form) or `url` property (array form)
 - `sources[*].tiles[*]` — tile URL templates
 - `sources[*].data` — GeoJSON data URL (when data is stored as a file, see [Section 8.2](#82-url-referenced-geojson))
 
-Sources, layers, or other style properties that reference external resources not included in the archive SHOULD be removed from the output `style.json`.
+Writers MUST remove sources, layers, or other style properties that reference external resources not included in the archive from the output `style.json`.
 
 ### 4.3 SMP Metadata
 
@@ -180,6 +180,7 @@ The `style.json` `metadata` object MAY contain the following SMP-specific proper
 #### 4.3.2 `smp:maxzoom` (OPTIONAL)
 
 - Type: Non-negative integer
+- Value MUST be between 0 and 30 (inclusive).
 - SHOULD equal the maximum zoom level of any tile source in the package.
 - For GeoJSON-only packages, the value SHOULD be 16 (the default GeoJSON rendering max zoom).
 
@@ -409,7 +410,7 @@ GeoJSON sources with inline data (where the `data` property is a GeoJSON object)
 
 ### 8.2 URL-Referenced GeoJSON
 
-GeoJSON sources that reference an external URL (where the `data` property is a string URL) SHOULD have their data fetched and stored as a file in the archive. The source's `data` property MUST be replaced with an SMP URI pointing to the stored file. It is RECOMMENDED that GeoJSON files are stored alongside tile data (e.g. under `s/`) in a subfolder named with the source ID.
+GeoJSON sources that reference an external URL (where the `data` property is a string URL) MUST have their data fetched and stored as a file in the archive. The source's `data` property MUST be replaced with an SMP URI pointing to the stored file. It is RECOMMENDED that GeoJSON files are stored alongside tile data (e.g. under `s/`) in a subfolder named with the source ID.
 
 GeoJSON data files MUST use either the `.json` or `.geojson` extension and SHOULD NOT be gzip-compressed.
 
