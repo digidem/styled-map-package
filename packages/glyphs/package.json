@@ -24,13 +24,15 @@
     "fixtures"
   ],
   "scripts": {
+    "test": "vitest run",
     "build": "tsup",
     "types": "tsc"
   },
   "devDependencies": {
     "@types/node": "^18.19.130",
     "tsup": "^8.4.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   },
   "keywords": [
     "maplibre",

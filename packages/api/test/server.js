@@ -439,6 +439,130 @@ test('server ignores malicious tile and glyph templates', async () => {
   }
 })
 
+test('server propagates fallbackTile errors', async () => {
+  const URI_BASE = 'smp://maps.v1/'
+
+  const mockReader = {
+    getStyle() {
+      return Promise.resolve({
+        version: 8,
+        sources: {
+          src: {
+            type: 'vector',
+            tiles: [URI_BASE + 's/0/{z}/{x}/{y}.mvt.gz'],
+            bounds: [-180, -85, 180, 85],
+            minzoom: 0,
+            maxzoom: 14,
+          },
+        },
+        layers: [],
+        metadata: { 'smp:bounds': [-180, -85, 180, 85], 'smp:maxzoom': 14 },
+      })
+    },
+    getResource(/** @type {string} */ path) {
+      const err = /** @type {any} */ (new Error('ENOENT: ' + path))
+      err.code = 'ENOENT'
+      return Promise.reject(err)
+    },
+  }
+
+  const server = createServer({
+    fallbackTile() {
+      throw new Error('tile handler exploded')
+    },
+  })
+
+  await assert.rejects(
+    () =>
+      server.fetch(
+        new Request('http://example.com/s/0/1/2/3.mvt.gz'),
+        /** @type {any} */ (mockReader),
+      ),
+    { message: 'tile handler exploded' },
+  )
+})
+
+test('server propagates fallbackGlyph errors', async () => {
+  const URI_BASE = 'smp://maps.v1/'
+
+  const mockReader = {
+    getStyle() {
+      return Promise.resolve({
+        version: 8,
+        sources: {},
+        layers: [],
+        glyphs: URI_BASE + 'fonts/{fontstack}/{range}.pbf.gz',
+        metadata: { 'smp:bounds': [-180, -85, 180, 85], 'smp:maxzoom': 0 },
+      })
+    },
+    getResource(/** @type {string} */ path) {
+      const err = /** @type {any} */ (new Error('ENOENT: ' + path))
+      err.code = 'ENOENT'
+      return Promise.reject(err)
+    },
+  }
+
+  const server = createServer({
+    fallbackGlyph() {
+      throw new Error('glyph handler exploded')
+    },
+  })
+
+  await assert.rejects(
+    () =>
+      server.fetch(
+        new Request('http://example.com/fonts/SomeFont/0-255.pbf.gz'),
+        /** @type {any} */ (mockReader),
+      ),
+    { message: 'glyph handler exploded' },
+  )
+})
+
+test('server handles style with no glyphs template', async () => {
+  const URI_BASE = 'smp://maps.v1/'
+
+  const mockReader = {
+    getStyle() {
+      return Promise.resolve({
+        version: 8,
+        sources: {
+          src: {
+            type: 'vector',
+            tiles: [URI_BASE + 's/0/{z}/{x}/{y}.mvt.gz'],
+            bounds: [-180, -85, 180, 85],
+            minzoom: 0,
+            maxzoom: 14,
+          },
+        },
+        layers: [],
+        // No glyphs property
+        metadata: { 'smp:bounds': [-180, -85, 180, 85], 'smp:maxzoom': 14 },
+      })
+    },
+    getResource(/** @type {string} */ path) {
+      const err = /** @type {any} */ (new Error('ENOENT: ' + path))
+      err.code = 'ENOENT'
+      return Promise.reject(err)
+    },
+  }
+
+  let glyphCalled = false
+  const server = createServer({
+    fallbackGlyph() {
+      glyphCalled = true
+      return new Response('should not reach')
+    },
+  })
+
+  // A request that looks like a glyph path should 404, not call fallbackGlyph
+  const responsePromise = server.fetch(
+    new Request('http://example.com/fonts/SomeFont/0-255.pbf.gz'),
+    /** @type {any} */ (mockReader),
+  )
+  await assert.rejects(() => responsePromise, { status: 404 })
+  assert.equal(glyphCalled, false)
+})
+
 test('server with parameter in base path', async () => {
   const filepath = fileURLToPath(
     new URL('./fixtures/demotiles-z2.smp', import.meta.url),

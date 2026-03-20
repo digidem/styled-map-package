@@ -11,17 +11,9 @@ const EMPTY_GZ = /* @__PURE__ */ fromHex(
   '1f8b080000000000001303000000000000000000',
 )
 
-// Resolve fixtures relative to package root (works from both lib/ and dist/)
-const GLYPHS_DIR = getGlyphsDir()
-
-function getGlyphsDir() {
-  try {
-    return fileURLToPath(new URL('../fixtures/glyphs', import.meta.url))
-  } catch {
-    // CJS fallback — import.meta.url is empty in CommonJS
-    return path.resolve(__dirname, '..', 'fixtures', 'glyphs')
-  }
-}
+// Resolve fixtures relative to package root (works from both lib/ and dist/
+// because tsup rewrites import.meta.url for CJS output)
+const GLYPHS_DIR = fileURLToPath(new URL('../fixtures/glyphs', import.meta.url))
 
 /** @type {Map<string, Uint8Array | null>} */
 const cache = new Map()
