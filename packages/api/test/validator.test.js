@@ -8,6 +8,16 @@ import { validate } from '../lib/validator.js'
 import { Writer } from '../lib/writer.js'
 import { streamToBuffer } from './utils/stream-consumers.js'
 
+/** @param {import('../lib/validator.js').ValidationResult} result */
+const errors = (result) => result.issues.filter((i) => i.kind === 'error')
+/** @param {import('../lib/validator.js').ValidationResult} result */
+const warnings = (result) => result.issues.filter((i) => i.kind === 'warning')
+/** @param {import('../lib/validator.js').ValidationResult} result @param {string} type */
+const hasError = (result, type) => errors(result).some((i) => i.type === type)
+/** @param {import('../lib/validator.js').ValidationResult} result @param {string} type */
+const hasWarning = (result, type) =>
+  warnings(result).some((i) => i.type === type)
+
 /**
  * Create a minimal valid SMP buffer using the Writer
  */
@@ -60,50 +70,84 @@ async function createZip(files) {
   return streamToBuffer(zipWriter.readable)
 }
 
-describe('validate', () => {
-  test('valid SMP file returns valid: true', async () => {
+describe('validate — issue structure', () => {
+  test('issues have kind, type, and message fields', async () => {
+    const result = await validate('/nonexistent/path/file.smp')
+    assert.equal(result.valid, false)
+    assert(result.issues.length > 0)
+    const issue = result.issues[0]
+    assert.equal(issue.kind, 'error')
+    assert.equal(issue.type, 'file_not_found')
+    assert(typeof issue.message === 'string')
+  })
+
+  test('valid SMP returns valid: true with no errors', async () => {
     const smpBuf = await createValidSmp()
     const filepath = await temporaryWrite(smpBuf)
     const result = await validate(filepath)
     assert.equal(result.valid, true)
-    assert.deepEqual(result.errors, [])
+    assert.equal(errors(result).length, 0)
   })
 
-  test('nonexistent file returns error', async () => {
-    const result = await validate('/nonexistent/path/file.smp')
-    assert.equal(result.valid, false)
-    assert(result.errors[0].includes('File not found'))
-  })
-
-  test('non-ZIP file returns error', async () => {
-    const filepath = await temporaryWrite(randomBytes(1024))
-    const result = await validate(filepath)
-    assert.equal(result.valid, false)
-    assert(result.errors[0].includes('Not a valid ZIP'))
-  })
-
-  test('ZIP without style.json returns error', async () => {
-    const zipBuf = await createZip([{ name: 'other.txt', data: 'hello' }])
-    const filepath = await temporaryWrite(zipBuf)
-    const result = await validate(filepath)
-    assert.equal(result.valid, false)
-    assert(result.errors.some((e) => e.includes('Missing style.json')))
-  })
-
-  test('ZIP with invalid JSON style.json returns error', async () => {
+  test('issues can be filtered by type for programmatic handling', async () => {
+    const style = {
+      version: 8,
+      sources: {
+        test: {
+          type: 'vector',
+          tiles: ['smp://maps.v1/s/0/{z}/{x}/{y}.mvt.gz'],
+          bounds: [-1, -1, 1, 1],
+          minzoom: 0,
+          maxzoom: 0,
+        },
+      },
+      layers: [],
+    }
     const zipBuf = await createZip([
       { name: 'VERSION', data: '1.0\n' },
-      { name: 'style.json', data: 'not json{{{' },
+      { name: 'style.json', data: JSON.stringify(style) },
     ])
     const filepath = await temporaryWrite(zipBuf)
     const result = await validate(filepath)
+    // Has errors, but if we filter out missing_tiles, no fatal errors remain
+    assert(hasError(result, 'missing_tiles'))
+    const fatalErrors = errors(result).filter((i) => i.type !== 'missing_tiles')
+    assert.equal(fatalErrors.length, 0)
+  })
+})
+
+describe('validate — ZIP and file errors', () => {
+  test('nonexistent file → file_not_found error', async () => {
+    const result = await validate('/nonexistent/path/file.smp')
     assert.equal(result.valid, false)
-    assert(result.errors.some((e) => e.includes('not valid JSON')))
+    assert(hasError(result, 'file_not_found'))
   })
 
-  test('SMP without VERSION file returns warning', async () => {
+  test('non-ZIP file → invalid_zip error', async () => {
+    const filepath = await temporaryWrite(randomBytes(1024))
+    const result = await validate(filepath)
+    assert.equal(result.valid, false)
+    assert(hasError(result, 'invalid_zip'))
+  })
+
+  test('unsafe ZIP entry with .. → unsafe_entry error', async () => {
+    const zipBuf = await createZip([
+      {
+        name: 'style.json',
+        data: JSON.stringify({ version: 8, sources: {}, layers: [] }),
+      },
+      { name: 'fonts/../etc/passwd', data: 'malicious' },
+    ])
+    const filepath = await temporaryWrite(zipBuf)
+    const result = await validate(filepath)
+    assert(hasError(result, 'unsafe_entry'))
+  })
+})
+
+describe('validate — VERSION file', () => {
+  test('missing VERSION → missing_version warning', async () => {
     const smpBuf = await createValidSmp()
-    // Create a new ZIP with all entries except VERSION
+    // Rebuild without VERSION
     const { ZipReader } = await import('@gmaclennan/zip-reader')
     const { BufferSource } =
       await import('@gmaclennan/zip-reader/buffer-source')
@@ -111,29 +155,16 @@ describe('validate', () => {
     const files = []
     for await (const entry of zip) {
       if (entry.name === 'VERSION') continue
-      const chunks = []
-      const reader = entry.readable().getReader()
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-        chunks.push(value)
-      }
-      const totalLength = chunks.reduce((sum, c) => sum + c.byteLength, 0)
-      const data = new Uint8Array(totalLength)
-      let offset = 0
-      for (const chunk of chunks) {
-        data.set(chunk, offset)
-        offset += chunk.byteLength
-      }
+      const data = await streamToBuffer(entry.readable())
       files.push({ name: entry.name, data })
     }
     const newZipBuf = await createZip(files)
     const filepath = await temporaryWrite(newZipBuf)
     const result = await validate(filepath)
-    assert(result.warnings.some((w) => w.includes('Missing VERSION')))
+    assert(hasWarning(result, 'missing_version'))
   })
 
-  test('SMP with unsupported major version returns error', async () => {
+  test('unsupported major version → unsupported_version error', async () => {
     const zipBuf = await createZip([
       { name: 'VERSION', data: '2.0\n' },
       {
@@ -144,32 +175,23 @@ describe('validate', () => {
     const filepath = await temporaryWrite(zipBuf)
     const result = await validate(filepath)
     assert.equal(result.valid, false)
-    assert(result.errors.some((e) => e.includes('Unsupported major version')))
+    assert(hasError(result, 'unsupported_version'))
   })
 
-  test('SMP with compatible minor version is accepted', async () => {
+  test('compatible minor version is accepted', async () => {
     const zipBuf = await createZip([
       { name: 'VERSION', data: '1.1\n' },
       {
         name: 'style.json',
-        data: JSON.stringify({
-          version: 8,
-          sources: {},
-          layers: [],
-          metadata: {
-            'smp:bounds': [-180, -85, 180, 85],
-            'smp:maxzoom': 5,
-          },
-        }),
+        data: JSON.stringify({ version: 8, sources: {}, layers: [] }),
       },
     ])
     const filepath = await temporaryWrite(zipBuf)
     const result = await validate(filepath)
-    assert.equal(result.valid, true)
-    assert.deepEqual(result.errors, [])
+    assert(!hasError(result, 'unsupported_version'))
   })
 
-  test('SMP with invalid version format returns error', async () => {
+  test('invalid version format → invalid_version_format warning', async () => {
     const zipBuf = await createZip([
       { name: 'VERSION', data: 'abc\n' },
       {
@@ -179,86 +201,205 @@ describe('validate', () => {
     ])
     const filepath = await temporaryWrite(zipBuf)
     const result = await validate(filepath)
+    assert(hasWarning(result, 'invalid_version_format'))
+  })
+})
+
+describe('validate — style.json', () => {
+  test('missing style.json → missing_style error', async () => {
+    const zipBuf = await createZip([{ name: 'other.txt', data: 'hello' }])
+    const filepath = await temporaryWrite(zipBuf)
+    const result = await validate(filepath)
     assert.equal(result.valid, false)
-    assert(result.errors.some((e) => e.includes('Invalid version format')))
+    assert(hasError(result, 'missing_style'))
   })
 
-  test('SMP missing smp:bounds returns error', async () => {
-    const style = {
-      version: 8,
-      sources: {},
-      layers: [],
-      metadata: {
-        'smp:maxzoom': 5,
-        'smp:sourceFolders': {},
-      },
-    }
+  test('invalid JSON → invalid_style_json error', async () => {
     const zipBuf = await createZip([
       { name: 'VERSION', data: '1.0\n' },
-      { name: 'style.json', data: JSON.stringify(style) },
+      { name: 'style.json', data: 'not json{{{' },
     ])
     const filepath = await temporaryWrite(zipBuf)
     const result = await validate(filepath)
     assert.equal(result.valid, false)
-    assert(result.errors.some((e) => e.includes('smp:bounds')))
+    assert(hasError(result, 'invalid_style_json'))
   })
+})
 
-  test('SMP missing smp:maxzoom returns error', async () => {
-    const style = {
-      version: 8,
-      sources: {},
-      layers: [],
-      metadata: {
-        'smp:bounds': [-180, -85, 180, 85],
-        'smp:sourceFolders': {},
-      },
-    }
+describe('validate — SMP metadata (§4.3, all OPTIONAL)', () => {
+  test('missing smp:bounds → warning (not error)', async () => {
     const zipBuf = await createZip([
       { name: 'VERSION', data: '1.0\n' },
-      { name: 'style.json', data: JSON.stringify(style) },
+      {
+        name: 'style.json',
+        data: JSON.stringify({
+          version: 8,
+          sources: {},
+          layers: [],
+          metadata: { 'smp:maxzoom': 5 },
+        }),
+      },
     ])
     const filepath = await temporaryWrite(zipBuf)
     const result = await validate(filepath)
-    assert.equal(result.valid, false)
-    assert(result.errors.some((e) => e.includes('smp:maxzoom')))
-  })
-
-  test('SMP missing smp:sourceFolders is valid (optional field)', async () => {
-    const style = {
-      version: 8,
-      sources: {},
-      layers: [],
-      metadata: {
-        'smp:bounds': [-180, -85, 180, 85],
-        'smp:maxzoom': 5,
-      },
-    }
-    const zipBuf = await createZip([
-      { name: 'VERSION', data: '1.0\n' },
-      { name: 'style.json', data: JSON.stringify(style) },
-    ])
-    const filepath = await temporaryWrite(zipBuf)
-    const result = await validate(filepath)
-    assert.equal(result.valid, true)
+    assert(hasWarning(result, 'missing_smp_bounds'))
     assert(
-      result.errors.every((e) => !e.includes('smp:sourceFolders')),
-      'Should not error about missing smp:sourceFolders',
+      !hasError(result, 'missing_smp_bounds'),
+      'should be warning not error',
     )
   })
 
-  test('valid SMP created by Writer passes validation', async () => {
+  test('missing smp:maxzoom → warning (not error)', async () => {
+    const zipBuf = await createZip([
+      { name: 'VERSION', data: '1.0\n' },
+      {
+        name: 'style.json',
+        data: JSON.stringify({
+          version: 8,
+          sources: {},
+          layers: [],
+          metadata: { 'smp:bounds': [-180, -85, 180, 85] },
+        }),
+      },
+    ])
+    const filepath = await temporaryWrite(zipBuf)
+    const result = await validate(filepath)
+    assert(hasWarning(result, 'missing_smp_maxzoom'))
+    assert(
+      !hasError(result, 'missing_smp_maxzoom'),
+      'should be warning not error',
+    )
+  })
+
+  test('missing smp:sourceFolders is valid (optional)', async () => {
+    const zipBuf = await createZip([
+      { name: 'VERSION', data: '1.0\n' },
+      {
+        name: 'style.json',
+        data: JSON.stringify({
+          version: 8,
+          sources: {},
+          layers: [],
+          metadata: { 'smp:bounds': [-180, -85, 180, 85], 'smp:maxzoom': 5 },
+        }),
+      },
+    ])
+    const filepath = await temporaryWrite(zipBuf)
+    const result = await validate(filepath)
+    assert(!hasWarning(result, 'invalid_smp_source_folders'))
+  })
+})
+
+describe('validate — source properties (§5.6)', () => {
+  test('source missing required properties → missing_source_property errors', async () => {
+    const zipBuf = await createZip([
+      { name: 'VERSION', data: '1.0\n' },
+      {
+        name: 'style.json',
+        data: JSON.stringify({
+          version: 8,
+          sources: { test: { type: 'vector' } },
+          layers: [],
+        }),
+      },
+    ])
+    const filepath = await temporaryWrite(zipBuf)
+    const result = await validate(filepath)
+    assert(hasError(result, 'missing_source_property'))
+    const propErrors = errors(result).filter(
+      (i) => i.type === 'missing_source_property',
+    )
+    const paths = propErrors.map((i) => i.path)
+    assert(paths.includes('sources.test.bounds'))
+    assert(paths.includes('sources.test.tiles'))
+  })
+
+  test('source with url property → source_has_url error', async () => {
+    const zipBuf = await createZip([
+      { name: 'VERSION', data: '1.0\n' },
+      {
+        name: 'style.json',
+        data: JSON.stringify({
+          version: 8,
+          sources: {
+            test: {
+              type: 'vector',
+              url: 'https://example.com/tilejson.json',
+              tiles: ['smp://maps.v1/s/0/{z}/{x}/{y}.mvt.gz'],
+              bounds: [-180, -85, 180, 85],
+              minzoom: 0,
+              maxzoom: 0,
+            },
+          },
+          layers: [],
+        }),
+      },
+      { name: 's/0/0/0/0.mvt.gz', data: new Uint8Array(64) },
+    ])
+    const filepath = await temporaryWrite(zipBuf)
+    const result = await validate(filepath)
+    assert(hasError(result, 'source_has_url'))
+  })
+
+  test('geojson sources skip source property validation', async () => {
+    const zipBuf = await createZip([
+      { name: 'VERSION', data: '1.0\n' },
+      {
+        name: 'style.json',
+        data: JSON.stringify({
+          version: 8,
+          sources: {
+            places: {
+              type: 'geojson',
+              data: { type: 'FeatureCollection', features: [] },
+            },
+          },
+          layers: [],
+        }),
+      },
+    ])
+    const filepath = await temporaryWrite(zipBuf)
+    const result = await validate(filepath)
+    assert(!hasError(result, 'missing_source_property'))
+  })
+})
+
+describe('validate — tile completeness (§5.7)', () => {
+  test('missing tiles → missing_tiles error with count', async () => {
+    const style = {
+      version: 8,
+      sources: {
+        test: {
+          type: 'vector',
+          tiles: ['smp://maps.v1/s/0/{z}/{x}/{y}.mvt.gz'],
+          bounds: [-1, -1, 1, 1],
+          minzoom: 0,
+          maxzoom: 0,
+        },
+      },
+      layers: [],
+    }
+    const zipBuf = await createZip([
+      { name: 'VERSION', data: '1.0\n' },
+      { name: 'style.json', data: JSON.stringify(style) },
+      // No tile files
+    ])
+    const filepath = await temporaryWrite(zipBuf)
+    const result = await validate(filepath)
+    assert(hasError(result, 'missing_tiles'))
+    const tileError = errors(result).find((i) => i.type === 'missing_tiles')
+    assert(tileError?.message.includes('missing'))
+    assert.equal(tileError?.path, 'sources.test')
+  })
+
+  test('complete tiles pass validation', async () => {
     const smpBuf = await createValidSmp()
     const filepath = await temporaryWrite(smpBuf)
     const result = await validate(filepath)
-    assert.equal(result.valid, true)
-    assert.deepEqual(result.errors, [])
-    assert(
-      result.warnings.every((w) => !w.includes('Missing VERSION')),
-      'Should not warn about VERSION',
-    )
+    assert(!hasError(result, 'missing_tiles'))
   })
 
-  test('SMP with missing tile files for a source returns error', async () => {
+  test('partial tiles report count of missing', async () => {
     const style = {
       version: 8,
       sources: {
@@ -267,38 +408,50 @@ describe('validate', () => {
           tiles: ['smp://maps.v1/s/0/{z}/{x}/{y}.mvt.gz'],
           bounds: [-180, -85, 180, 85],
           minzoom: 0,
-          maxzoom: 5,
+          maxzoom: 1,
         },
       },
       layers: [],
-      metadata: {
-        'smp:bounds': [-180, -85, 180, 85],
-        'smp:maxzoom': 5,
-        'smp:sourceFolders': { test: '0' },
-      },
     }
+    // z0 has 1 tile, z1 has 4 tiles — only provide z0
     const zipBuf = await createZip([
       { name: 'VERSION', data: '1.0\n' },
       { name: 'style.json', data: JSON.stringify(style) },
-      // No tile files!
+      { name: 's/0/0/0/0.mvt.gz', data: new Uint8Array(64) },
     ])
     const filepath = await temporaryWrite(zipBuf)
     const result = await validate(filepath)
-    assert.equal(result.valid, false)
-    assert(result.errors.some((e) => e.includes('No tile files found')))
+    assert(hasError(result, 'missing_tiles'))
+    const tileError = errors(result).find((i) => i.type === 'missing_tiles')
+    assert(tileError?.message.includes('4'), 'should report 4 missing z1 tiles')
   })
+})
 
-  test('SMP with missing glyph files returns error', async () => {
+describe('validate — glyphs (§6, §9)', () => {
+  test('missing glyph files → missing_glyphs error', async () => {
     const style = {
       version: 8,
       sources: {},
       layers: [],
       glyphs: 'smp://maps.v1/fonts/{fontstack}/{range}.pbf.gz',
-      metadata: {
-        'smp:bounds': [-180, -85, 180, 85],
-        'smp:maxzoom': 5,
-        'smp:sourceFolders': {},
-      },
+    }
+    const zipBuf = await createZip([
+      { name: 'VERSION', data: '1.0\n' },
+      { name: 'style.json', data: JSON.stringify(style) },
+    ])
+    const filepath = await temporaryWrite(zipBuf)
+    const result = await validate(filepath)
+    assert(hasError(result, 'missing_glyphs'))
+  })
+})
+
+describe('validate — sprites (§7)', () => {
+  test('missing 1x sprite files → missing_sprite error', async () => {
+    const style = {
+      version: 8,
+      sources: {},
+      layers: [],
+      sprite: 'smp://maps.v1/sprites/default/sprite',
     }
     const zipBuf = await createZip([
       { name: 'VERSION', data: '1.0\n' },
@@ -307,42 +460,15 @@ describe('validate', () => {
     const filepath = await temporaryWrite(zipBuf)
     const result = await validate(filepath)
     assert.equal(result.valid, false)
-    assert(result.errors.some((e) => e.includes('no glyph files found')))
+    assert(hasError(result, 'missing_sprite'))
   })
 
-  test('SMP with missing sprite files returns error', async () => {
+  test('1x sprites present but no 2x → missing_sprite_2x warning', async () => {
     const style = {
       version: 8,
       sources: {},
       layers: [],
       sprite: 'smp://maps.v1/sprites/default/sprite',
-      metadata: {
-        'smp:bounds': [-180, -85, 180, 85],
-        'smp:maxzoom': 5,
-        'smp:sourceFolders': {},
-      },
-    }
-    const zipBuf = await createZip([
-      { name: 'VERSION', data: '1.0\n' },
-      { name: 'style.json', data: JSON.stringify(style) },
-    ])
-    const filepath = await temporaryWrite(zipBuf)
-    const result = await validate(filepath)
-    assert.equal(result.valid, false)
-    assert(result.errors.some((e) => e.includes('Missing sprite file')))
-  })
-
-  test('SMP with 1x sprites but no 2x returns warning', async () => {
-    const style = {
-      version: 8,
-      sources: {},
-      layers: [],
-      sprite: 'smp://maps.v1/sprites/default/sprite',
-      metadata: {
-        'smp:bounds': [-180, -85, 180, 85],
-        'smp:maxzoom': 5,
-        'smp:sourceFolders': {},
-      },
     }
     const zipBuf = await createZip([
       { name: 'VERSION', data: '1.0\n' },
@@ -356,10 +482,10 @@ describe('validate', () => {
     const filepath = await temporaryWrite(zipBuf)
     const result = await validate(filepath)
     assert.equal(result.valid, true)
-    assert(result.warnings.some((w) => w.includes('@2x')))
+    assert(hasWarning(result, 'missing_sprite_2x'))
   })
 
-  test('SMP with array sprites validates each', async () => {
+  test('array sprites validates each entry', async () => {
     const style = {
       version: 8,
       sources: {},
@@ -368,11 +494,6 @@ describe('validate', () => {
         { id: 'default', url: 'smp://maps.v1/sprites/default/sprite' },
         { id: 'signs', url: 'smp://maps.v1/sprites/signs/sprite' },
       ],
-      metadata: {
-        'smp:bounds': [-180, -85, 180, 85],
-        'smp:maxzoom': 5,
-        'smp:sourceFolders': {},
-      },
     }
     const zipBuf = await createZip([
       { name: 'VERSION', data: '1.0\n' },
@@ -387,9 +508,14 @@ describe('validate', () => {
     const filepath = await temporaryWrite(zipBuf)
     const result = await validate(filepath)
     assert.equal(result.valid, false)
-    assert(result.errors.some((e) => e.includes('signs')))
+    const spriteErrors = errors(result).filter(
+      (i) => i.type === 'missing_sprite',
+    )
+    assert(spriteErrors.some((i) => i.message.includes('signs')))
   })
+})
 
+describe('validate — ZipReader input', () => {
   test('accepts a ZipReader instance', async () => {
     const smpBuf = await createValidSmp()
     const { ZipReader } = await import('@gmaclennan/zip-reader')
@@ -398,6 +524,17 @@ describe('validate', () => {
     const zipReader = await ZipReader.from(new BufferSource(smpBuf))
     const result = await validate(zipReader)
     assert.equal(result.valid, true)
-    assert.deepEqual(result.errors, [])
+    assert.equal(errors(result).length, 0)
+  })
+})
+
+describe('validate — Writer output', () => {
+  test('valid SMP created by Writer passes validation', async () => {
+    const smpBuf = await createValidSmp()
+    const filepath = await temporaryWrite(smpBuf)
+    const result = await validate(filepath)
+    assert.equal(result.valid, true)
+    assert.equal(errors(result).length, 0)
+    assert(!hasWarning(result, 'missing_version'), 'Writer includes VERSION')
   })
 })

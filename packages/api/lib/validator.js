@@ -1,4 +1,5 @@
 import { ZipReader } from '@gmaclennan/zip-reader'
+import SphericalMercator from '@mapbox/sphericalmercator'
 import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec'
 
 import { STYLE_FILE, URI_BASE, VERSION_FILE } from './utils/templates.js'
@@ -6,26 +7,54 @@ import { STYLE_FILE, URI_BASE, VERSION_FILE } from './utils/templates.js'
 /** Major version(s) supported by this implementation */
 const SUPPORTED_MAJOR_VERSIONS = [1]
 
+const sm = new SphericalMercator({ size: 256 })
+
+/**
+ * @typedef {object} ValidationIssue
+ * @property {'error' | 'warning'} kind - error = spec MUST violation; warning = SHOULD/RECOMMENDED
+ * @property {string} type - Stable identifier for programmatic matching
+ * @property {string} message - Human-readable description
+ * @property {string} [path] - Location context (e.g. 'sources.test.tiles', 'VERSION')
+ */
+
 /**
  * @typedef {object} ValidationResult
- * @property {boolean} valid
- * @property {string[]} errors
- * @property {string[]} warnings
+ * @property {boolean} valid - true when there are no errors (warnings are acceptable)
+ * @property {ValidationIssue[]} issues - all issues found
  */
 
 /**
  * Validate a Styled Map Package file against the SMP specification.
  *
+ * Returns a list of issues, each with a `kind` ('error' or 'warning') and a
+ * stable `type` string for programmatic filtering. Errors indicate spec MUST
+ * violations; warnings indicate SHOULD/RECOMMENDED violations.
+ *
  * @param {string | import('@gmaclennan/zip-reader').ZipReader} source Path to the .smp file, or a ZipReader instance
  * @returns {Promise<ValidationResult>}
  */
 export async function validate(source) {
-  /** @type {string[]} */
-  const errors = []
-  /** @type {string[]} */
-  const warnings = []
+  /** @type {ValidationIssue[]} */
+  const issues = []
+  const error = (
+    /** @type {string} */ type,
+    /** @type {string} */ message,
+    /** @type {string} [path] */ path,
+  ) =>
+    issues.push({ kind: 'error', type, message, ...(path != null && { path }) })
+  const warn = (
+    /** @type {string} */ type,
+    /** @type {string} */ message,
+    /** @type {string} [path] */ path,
+  ) =>
+    issues.push({
+      kind: 'warning',
+      type,
+      message,
+      ...(path != null && { path }),
+    })
 
-  // Level 1: ZIP validity
+  // §3: ZIP validity
   /** @type {import('@gmaclennan/zip-reader').ZipReader} */
   let zip
   /** @type {import('@gmaclennan/zip-reader/file-source').FileSource | null} */
@@ -41,58 +70,89 @@ export async function validate(source) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     if (/** @type {any} */ (err)?.code === 'ENOENT') {
-      return result(errors, warnings, `File not found: ${source}`)
+      error('file_not_found', `File not found: ${source}`)
+      return { valid: false, issues }
     }
-    return result(errors, warnings, `Not a valid ZIP file: ${message}`)
+    error('invalid_zip', `Not a valid ZIP file: ${message}`)
+    return { valid: false, issues }
   }
 
   try {
-    // Build entry map
+    // Build entry map and check entry name safety (§3.4, §11)
     /** @type {Map<string, import('@gmaclennan/zip-reader').ZipEntry>} */
     const entries = new Map()
-    for await (const entry of zip) {
-      entries.set(entry.name, entry)
+    try {
+      for await (const entry of zip) {
+        const name = entry.name
+        if (
+          name.includes('..') ||
+          name.startsWith('/') ||
+          /^[A-Za-z]:/.test(name)
+        ) {
+          error('unsafe_entry', `Unsafe ZIP entry name: ${name}`, name)
+        }
+        entries.set(name, entry)
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (/Relative path|Absolute path|Unsafe/i.test(message)) {
+        error('unsafe_entry', `ZIP contains unsafe entry: ${message}`)
+        return { valid: false, issues }
+      }
+      throw err
     }
 
-    // Level 2: VERSION file
+    // §3.1: VERSION file
     const versionEntry = entries.get(VERSION_FILE)
     if (!versionEntry) {
-      warnings.push('Missing VERSION file (assuming version 1.0)')
+      warn(
+        'missing_version',
+        'Missing VERSION file (assuming version 1.0)',
+        'VERSION',
+      )
     } else {
       const version = (
         await new Response(versionEntry.readable()).text()
       ).trim()
       const majorMatch = version.match(/^(\d+)\.\d+$/)
       if (!majorMatch) {
-        errors.push(
+        warn(
+          'invalid_version_format',
           `Invalid version format: "${version}" (expected MAJOR.MINOR)`,
+          'VERSION',
         )
       } else {
         const major = parseInt(majorMatch[1], 10)
         if (!SUPPORTED_MAJOR_VERSIONS.includes(major)) {
-          errors.push(
+          error(
+            'unsupported_version',
             `Unsupported major version: ${major} (supported: ${SUPPORTED_MAJOR_VERSIONS.join(', ')})`,
+            'VERSION',
           )
         }
       }
     }
 
-    // Level 3: style.json presence
+    // §4.1: style.json presence
     const styleEntry = entries.get(STYLE_FILE)
     if (!styleEntry) {
-      errors.push('Missing style.json')
-      return { valid: false, errors, warnings }
+      error('missing_style', 'Missing style.json', 'style.json')
+      return { valid: false, issues }
     }
 
-    // Level 4: style.json validity
+    // §4.1: style.json validity
     /** @type {any} */
     let style
     try {
       style = await new Response(styleEntry.readable()).json()
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      errors.push(`style.json is not valid JSON: ${message}`)
-      return { valid: false, errors, warnings }
+      error(
+        'invalid_style_json',
+        `style.json is not valid JSON: ${message}`,
+        'style.json',
+      )
+      return { valid: false, issues }
     }
 
     const styleErrors = validateStyleMin(
@@ -101,71 +161,111 @@ export async function validate(source) {
       ),
     )
     for (const e of styleErrors) {
-      errors.push(`style.json: ${e.message}`)
+      error('invalid_style', `style.json: ${e.message}`, 'style.json')
     }
 
-    // Level 5: SMP metadata
+    // §4.3: SMP metadata (all OPTIONAL → warnings)
     const metadata = style.metadata || {}
 
     if (
       !Array.isArray(metadata['smp:bounds']) ||
       metadata['smp:bounds'].length !== 4
     ) {
-      errors.push('Missing or invalid smp:bounds in style.json metadata')
-    } else {
-      const [w, s, e, n] = metadata['smp:bounds']
-      if (
-        typeof w !== 'number' ||
-        typeof s !== 'number' ||
-        typeof e !== 'number' ||
-        typeof n !== 'number'
-      ) {
-        errors.push('smp:bounds values must be numbers')
-      }
+      warn(
+        'missing_smp_bounds',
+        'Missing or invalid smp:bounds in metadata',
+        'metadata.smp:bounds',
+      )
     }
 
     if (typeof metadata['smp:maxzoom'] !== 'number') {
-      errors.push('Missing or invalid smp:maxzoom in style.json metadata')
+      warn(
+        'missing_smp_maxzoom',
+        'Missing or invalid smp:maxzoom in metadata',
+        'metadata.smp:maxzoom',
+      )
     }
 
     const sourceFolders = metadata['smp:sourceFolders']
     if (sourceFolders && typeof sourceFolders !== 'object') {
-      warnings.push('Invalid smp:sourceFolders in style.json metadata')
+      warn(
+        'invalid_smp_source_folders',
+        'Invalid smp:sourceFolders in metadata',
+        'metadata.smp:sourceFolders',
+      )
     }
 
-    // Level 6: Source verification — extract tile path prefix from URL template
+    // §5.6, §5.7: Source validation
     if (style.sources) {
       for (const [sourceId, source] of Object.entries(style.sources)) {
+        const src = /** @type {any} */ (source)
+        if (src.type === 'geojson') continue
+
+        // §5.6: Source url property must not exist
+        if ('url' in src) {
+          error(
+            'source_has_url',
+            `Source "${sourceId}" has url property (must be inlined)`,
+            `sources.${sourceId}`,
+          )
+        }
+
+        // §5.6: Required source properties
+        for (const prop of ['bounds', 'minzoom', 'maxzoom', 'tiles']) {
+          if (!(prop in src)) {
+            error(
+              'missing_source_property',
+              `Source "${sourceId}" missing required property: ${prop}`,
+              `sources.${sourceId}.${prop}`,
+            )
+          }
+        }
+
+        // §5.7: Tile completeness check
         if (
-          /** @type {any} */ (source).tiles &&
-          Array.isArray(/** @type {any} */ (source).tiles)
+          Array.isArray(src.tiles) &&
+          src.tiles.length > 0 &&
+          typeof src.tiles[0] === 'string' &&
+          src.tiles[0].startsWith(URI_BASE) &&
+          Array.isArray(src.bounds) &&
+          typeof src.minzoom === 'number' &&
+          typeof src.maxzoom === 'number'
         ) {
-          for (const tileUrl of /** @type {any} */ (source).tiles) {
-            if (typeof tileUrl === 'string' && tileUrl.startsWith(URI_BASE)) {
-              // Extract the path prefix before {z} from the URL template
-              const templatePath = tileUrl.slice(URI_BASE.length)
-              const prefixEnd = templatePath.indexOf('{z}')
-              if (prefixEnd === -1) continue
-              const tilePrefix = templatePath.slice(0, prefixEnd)
-              let hasTiles = false
-              for (const filename of entries.keys()) {
-                if (filename.startsWith(tilePrefix)) {
-                  hasTiles = true
-                  break
-                }
-              }
-              if (!hasTiles) {
-                errors.push(
-                  `No tile files found for source "${sourceId}" (expected under ${tilePrefix})`,
-                )
+          const template = src.tiles[0].slice(URI_BASE.length)
+          let missingCount = 0
+          /** @type {string[]} */
+          const missingExamples = []
+          for (const { x, y, z } of tileIterator({
+            bounds: src.bounds,
+            minzoom: src.minzoom,
+            maxzoom: src.maxzoom,
+          })) {
+            const tilePath = template
+              .replace('{z}', String(z))
+              .replace('{x}', String(x))
+              .replace('{y}', String(y))
+            if (!entries.has(tilePath)) {
+              missingCount++
+              if (missingExamples.length < 3) {
+                missingExamples.push(tilePath)
               }
             }
+          }
+          if (missingCount > 0) {
+            const examples = missingExamples.join(', ')
+            const suffix =
+              missingCount > 3 ? ` and ${missingCount - 3} more` : ''
+            error(
+              'missing_tiles',
+              `Source "${sourceId}" is missing ${missingCount} tile(s): ${examples}${suffix}`,
+              `sources.${sourceId}`,
+            )
           }
         }
       }
     }
 
-    // Level 7: Glyph verification — extract path prefix from glyphs URI
+    // §6, §9: Glyph verification
     if (typeof style.glyphs === 'string' && style.glyphs.startsWith(URI_BASE)) {
       const glyphTemplate = style.glyphs.slice(URI_BASE.length)
       const prefixEnd = glyphTemplate.indexOf('{fontstack}')
@@ -182,19 +282,23 @@ export async function validate(source) {
         }
       }
       if (!hasGlyphs) {
-        errors.push('style.json references glyphs but no glyph files found')
+        error(
+          'missing_glyphs',
+          'style.json references glyphs but no glyph files found',
+          'glyphs',
+        )
       }
     }
 
-    // Level 8: Sprite verification — extract base path from sprite URI
+    // §7, §9: Sprite verification
     if (typeof style.sprite === 'string' && style.sprite.startsWith(URI_BASE)) {
       const basePath = style.sprite.slice(URI_BASE.length)
-      validateSpriteFiles(entries, basePath, errors, warnings)
+      validateSpriteFiles(entries, basePath, error, warn)
     } else if (Array.isArray(style.sprite)) {
       for (const { url } of style.sprite) {
         if (typeof url === 'string' && url.startsWith(URI_BASE)) {
           const basePath = url.slice(URI_BASE.length)
-          validateSpriteFiles(entries, basePath, errors, warnings)
+          validateSpriteFiles(entries, basePath, error, warn)
         }
       }
     }
@@ -202,41 +306,50 @@ export async function validate(source) {
     if (fileSource) await fileSource.close()
   }
 
-  return { valid: errors.length === 0, errors, warnings }
+  return { valid: !issues.some((i) => i.kind === 'error'), issues }
 }
 
 /**
  * @param {Map<string, any>} entries
  * @param {string} basePath sprite base path (without extension)
- * @param {string[]} errors
- * @param {string[]} warnings
+ * @param {(type: string, message: string, path?: string) => void} error
+ * @param {(type: string, message: string, path?: string) => void} warn
  */
-function validateSpriteFiles(entries, basePath, errors, warnings) {
+function validateSpriteFiles(entries, basePath, error, warn) {
   const jsonPath = basePath + '.json'
   const pngPath = basePath + '.png'
   const json2xPath = basePath + '@2x.json'
   const png2xPath = basePath + '@2x.png'
 
   if (!entries.has(jsonPath)) {
-    errors.push(`Missing sprite file: ${jsonPath}`)
+    error('missing_sprite', `Missing sprite file: ${jsonPath}`, jsonPath)
   }
   if (!entries.has(pngPath)) {
-    errors.push(`Missing sprite file: ${pngPath}`)
+    error('missing_sprite', `Missing sprite file: ${pngPath}`, pngPath)
   }
   if (!entries.has(json2xPath) || !entries.has(png2xPath)) {
-    warnings.push(
+    warn(
+      'missing_sprite_2x',
       `Missing @2x sprite for "${basePath}" (recommended but not required)`,
+      basePath,
     )
   }
 }
 
 /**
- * @param {string[]} errors
- * @param {string[]} warnings
- * @param {string} error
- * @returns {ValidationResult}
+ * Iterate tile coordinates for a bounding box and zoom range.
+ * @param {object} opts
+ * @param {number[]} opts.bounds [west, south, east, north]
+ * @param {number} opts.minzoom
+ * @param {number} opts.maxzoom
  */
-function result(errors, warnings, error) {
-  errors.push(error)
-  return { valid: false, errors, warnings }
+function* tileIterator({ bounds, minzoom, maxzoom }) {
+  for (let z = minzoom; z <= maxzoom; z++) {
+    const { minX, minY, maxX, maxY } = sm.xyz([...bounds], z)
+    for (let x = minX; x <= maxX; x++) {
+      for (let y = minY; y <= maxY; y++) {
+        yield { x, y, z }
+      }
+    }
+  }
 }

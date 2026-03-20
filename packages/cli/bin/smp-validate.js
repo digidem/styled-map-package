@@ -18,17 +18,20 @@ program
       console.log(logSymbols.error, chalk.red('Invalid SMP file'))
     }
 
-    if (result.errors.length) {
+    const issueErrors = result.issues.filter((i) => i.kind === 'error')
+    const issueWarnings = result.issues.filter((i) => i.kind === 'warning')
+
+    if (issueErrors.length) {
       console.log('\nErrors:')
-      for (const err of result.errors) {
-        console.log(`  ${logSymbols.error} ${err}`)
+      for (const issue of issueErrors) {
+        console.log(`  ${logSymbols.error} ${issue.message}`)
       }
     }
 
-    if (result.warnings.length) {
+    if (issueWarnings.length) {
       console.log('\nWarnings:')
-      for (const warn of result.warnings) {
-        console.log(`  ${logSymbols.warning} ${warn}`)
+      for (const issue of issueWarnings) {
+        console.log(`  ${logSymbols.warning} ${issue.message}`)
       }
     }
 
