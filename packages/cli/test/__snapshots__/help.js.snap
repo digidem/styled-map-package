@@ -10,6 +10,7 @@ Commands:
   download        Download a map style to a styled map package file
   view            Preview a styled map package in a web browser
   mbtiles         Convert a MBTiles file to a styled map package file
+  validate        Validate a styled map package file
   help [command]  display help for command
 "
 `;
