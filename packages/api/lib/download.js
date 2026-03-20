@@ -18,7 +18,7 @@ import { Writer } from './writer.js'
  * containing all the resources needed to serve the style offline.
  *
  * @param {object} opts
- * @param {import("./utils/geo.js").BBox} opts.bbox Bounding box to download tiles for
+ * @param {Readonly<import("./utils/geo.js").BBox>} opts.bbox Bounding box to download tiles for
  * @param {number} opts.maxzoom Max zoom level to download tiles for
  * @param {string} opts.styleUrl URL of the style to download
  * @param { (progress: DownloadProgress) => void } [opts.onprogress] Optional callback for reporting progress
@@ -74,14 +74,16 @@ export function download({
   })
 
   ;(async () => {
-    const style = await downloader.getStyle()
-    const writer = new Writer(style, { dedupe: !!dedupe })
-    handleProgress({ style: { done: true } })
-    // Pipe the output stream through the size counter (fire-and-forget;
-    // errors propagate via writer.abort())
-    writer.outputStream.pipeTo(sizeCounter.writable).catch(() => {})
-
+    /** @type {Writer | undefined} */
+    let writer
     try {
+      const style = await downloader.getStyle()
+      writer = new Writer(style, { dedupe: !!dedupe })
+      handleProgress({ style: { done: true } })
+      // Pipe the output stream through the size counter (fire-and-forget;
+      // errors propagate via writer.abort())
+      writer.outputStream.pipeTo(sizeCounter.writable).catch(() => {})
+
       for await (const spriteInfo of downloader.getSprites()) {
         await writer.addSprite(spriteInfo)
         handleProgress({
@@ -111,7 +113,11 @@ export function download({
 
       writer.finish()
     } catch (err) {
-      writer.abort(/** @type {Error} */ (err))
+      if (writer) {
+        writer.abort(/** @type {Error} */ (err))
+      } else {
+        sizeCounter.writable.abort(/** @type {Error} */ (err))
+      }
     }
   })()
 
