@@ -3,9 +3,90 @@ import { afterAll, assert, beforeAll, describe, test } from 'vitest'
 import { createServer as createHTTPServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
 
-import { StyleDownloader } from '../lib/index.js'
+import { StyleDownloader } from '../lib/style-downloader.js'
 import { startSMPServer } from './utils/smp-server.js'
 import { streamToBuffer } from './utils/stream-consumers.js'
+
+/** A minimal v7 style that should be auto-migrated to v8 */
+const V7_STYLE = {
+  version: 7,
+  sources: {},
+  layers: [
+    {
+      id: 'bg',
+      type: 'background',
+      paint: { 'background-color': 'red' },
+    },
+  ],
+}
+
+describe('StyleDownloader style migration', () => {
+  test('constructor accepts v7 style object and migrates to v8', () => {
+    const downloader = new StyleDownloader(/** @type {any} */ (V7_STYLE))
+    assert.equal(downloader.active, 0)
+  })
+
+  test('getStyle() returns v8 after migrating v7 style object', async () => {
+    const downloader = new StyleDownloader(/** @type {any} */ (V7_STYLE))
+    const style = await downloader.getStyle()
+    assert.equal(style.version, 8)
+  })
+
+  test('v8 style passes through unchanged', async () => {
+    const v8Style = {
+      version: /** @type {const} */ (8),
+      sources: {},
+      layers: /** @type {any[]} */ ([
+        { id: 'bg', type: 'background', paint: { 'background-color': 'blue' } },
+      ]),
+    }
+    const downloader = new StyleDownloader(v8Style)
+    const style = await downloader.getStyle()
+    assert.equal(style.version, 8)
+  })
+
+  test('constructor does not mutate the original style object', () => {
+    const original = JSON.parse(JSON.stringify(V7_STYLE))
+    new StyleDownloader(/** @type {any} */ (original))
+    assert.equal(original.version, 7, 'original should still be v7')
+  })
+})
+
+describe('StyleDownloader v7 style from URL', () => {
+  /** @type {import('node:http').Server} */
+  let jsonServer
+  /** @type {string} */
+  let baseUrl
+
+  beforeAll(async () => {
+    jsonServer = createHTTPServer((req, res) => {
+      if (req.url === '/v7-style.json') {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(V7_STYLE))
+      } else {
+        res.writeHead(404)
+        res.end()
+      }
+    })
+    await /** @type {Promise<void>} */ (
+      new Promise((resolve) => jsonServer.listen(0, resolve))
+    )
+    const { port } = /** @type {import('node:net').AddressInfo} */ (
+      jsonServer.address()
+    )
+    baseUrl = `http://localhost:${port}/`
+  })
+
+  afterAll(async () => {
+    if (jsonServer) await new Promise((resolve) => jsonServer.close(resolve))
+  })
+
+  test('getStyle() migrates v7 style downloaded from URL', async () => {
+    const downloader = new StyleDownloader(baseUrl + 'v7-style.json')
+    const style = await downloader.getStyle()
+    assert.equal(style.version, 8)
+  })
+})
 
 describe('StyleDownloader with demotiles-z2', () => {
   /** @type {{ baseUrl: string, close: () => Promise<void> }} */
