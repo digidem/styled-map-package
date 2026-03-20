@@ -770,6 +770,7 @@ describe('validate — glyphs (§6)', () => {
       glyphs: 'smp://maps.v1/fonts/{fontstack}/{range}.pbf.gz',
     }
     // Provide all 93 non-locally-rendered ranges (skip CJK/Hangul/Kana)
+    /** @type {Array<{name: string, data: string | Uint8Array}>} */
     const files = [
       { name: 'VERSION', data: '1.0\n' },
       { name: 'style.json', data: JSON.stringify(style) },
