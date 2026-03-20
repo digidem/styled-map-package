@@ -767,7 +767,7 @@ function hasValidTileConfig(src) {
 /**
  * Iterate tile coordinates for a bounding box and zoom range.
  * @param {object} opts
- * @param {number[]} opts.bounds [west, south, east, north]
+ * @param {[number, number, number, number]} opts.bounds [west, south, east, north]
  * @param {number} opts.minzoom
  * @param {number} opts.maxzoom
  */

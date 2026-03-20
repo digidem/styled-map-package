@@ -79,6 +79,7 @@ async function createZip(files) {
     })
   }
   await zipWriter.finalize()
+  // @ts-ignore
   return streamToBuffer(zipWriter.readable)
 }
 
