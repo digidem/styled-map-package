@@ -3,7 +3,7 @@ import { afterAll, assert, beforeAll, describe, test } from 'vitest'
 import { createServer as createHTTPServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
 
-import { StyleDownloader } from '../lib/index.js'
+import { StyleDownloader } from '../lib/style-downloader.js'
 import { startSMPServer } from './utils/smp-server.js'
 import { streamToBuffer } from './utils/stream-consumers.js'
 

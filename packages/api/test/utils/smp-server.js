@@ -3,7 +3,8 @@ import { error } from 'itty-router/error'
 
 import { createServer as createHTTPServer } from 'node:http'
 
-import { createServer, Reader } from '../../lib/index.js'
+import { Reader } from '../../lib/reader.js'
+import { createServer } from '../../lib/server.js'
 
 /**
  * Start a local HTTP server that serves an SMP fixture.
