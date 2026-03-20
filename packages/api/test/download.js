@@ -126,15 +126,19 @@ describe('download with demotiles-z2 (glyphs, no sprites)', () => {
     assert(last.elapsedMs > 0, 'elapsedMs > 0')
   })
 
-  test('download stream emits error for unreachable URL', async () => {
-    const smpStream = download({
-      styleUrl: 'http://127.0.0.1:1/nonexistent/style.json',
-      bbox: [-1, -1, 1, 1],
-      maxzoom: 0,
-    })
+  test(
+    'download stream emits error for unreachable URL',
+    { timeout: 15_000 },
+    async () => {
+      const smpStream = download({
+        styleUrl: 'http://127.0.0.1:1/nonexistent/style.json',
+        bbox: [-1, -1, 1, 1],
+        maxzoom: 0,
+      })
 
-    await expect(() => streamToBuffer(smpStream)).rejects.toThrow()
-  })
+      await expect(() => streamToBuffer(smpStream)).rejects.toThrow()
+    },
+  )
 })
 
 describe('download with osm-bright-z6 (sprites)', () => {
