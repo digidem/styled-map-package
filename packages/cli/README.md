@@ -25,12 +25,14 @@ smp download https://demotiles.maplibre.org/style.json \
 
 **Options:**
 
-| Option                 | Description                                      |
-| ---------------------- | ------------------------------------------------ |
-| `-o, --output <file>`  | Output file (writes to stdout if omitted)        |
-| `-b, --bbox <w,s,e,n>` | Bounding box (west, south, east, north)          |
-| `-z, --zoom <number>`  | Max zoom level (0-22)                            |
-| `-t, --token <token>`  | Mapbox access token (required for Mapbox styles) |
+| Option                 | Description                                                       |
+| ---------------------- | ----------------------------------------------------------------- |
+| `-o, --output <file>`  | Output file (writes to stdout if omitted)                         |
+| `-b, --bbox <w,s,e,n>` | Bounding box (west, south, east, north)                           |
+| `-z, --zoom <number>`  | Max zoom level (0-22)                                             |
+| `-t, --token <token>`  | Mapbox access token (required for Mapbox styles)                  |
+| `-d, --dedupe`         | Deduplicate tiles with identical content to reduce file size      |
+| `--skip-local-glyphs`  | Skip CJK/Hangul/Kana glyph ranges rendered locally by MapLibre GL |
 
 When run interactively, missing options are prompted for.
 
@@ -67,6 +69,22 @@ smp mbtiles tiles.mbtiles --output map.smp
 | Option                | Description                                      |
 | --------------------- | ------------------------------------------------ |
 | `-o, --output <file>` | Output `.smp` file (writes to stdout if omitted) |
+
+### `smp validate`
+
+Validate a `.smp` file against the [SMP specification](../../spec/1.0/).
+
+```sh
+smp validate map.smp
+```
+
+Reports errors (spec MUST violations) and warnings (SHOULD/RECOMMENDED), each annotated with a severity level:
+
+- **fatal** — the file cannot be opened by the reader
+- **rendering** — the map opens but content will be visibly broken (missing tiles, glyphs, sprites)
+- **spec** — non-compliance that doesn't affect practical use
+
+Exits with code 0 if valid, 1 if errors are found.
 
 ## License
 

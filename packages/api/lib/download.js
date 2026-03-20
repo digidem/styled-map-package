@@ -23,9 +23,19 @@ import { Writer } from './writer.js'
  * @param {string} opts.styleUrl URL of the style to download
  * @param { (progress: DownloadProgress) => void } [opts.onprogress] Optional callback for reporting progress
  * @param {string} [opts.accessToken]
+ * @param {boolean} [opts.skipLocalGlyphs] Skip glyph ranges rendered client-side by MapLibre GL via localIdeographFontFamily (CJK, Hangul, Kana, Yi, etc.)
+ * @param {boolean} [opts.dedupe] When true, duplicate tiles are stored only once (see {@link Writer})
  * @returns {import('./types.js').DownloadStream} Readable stream of the output styled map file
  */
-export function download({ bbox, maxzoom, styleUrl, onprogress, accessToken }) {
+export function download({
+  bbox,
+  maxzoom,
+  styleUrl,
+  onprogress,
+  accessToken,
+  skipLocalGlyphs,
+  dedupe,
+}) {
   const downloader = new StyleDownloader(styleUrl, {
     concurrency: 24,
     mapboxAccessToken: accessToken,
@@ -64,14 +74,14 @@ export function download({ bbox, maxzoom, styleUrl, onprogress, accessToken }) {
   })
 
   ;(async () => {
-    let writer
+    const style = await downloader.getStyle()
+    const writer = new Writer(style, { dedupe: !!dedupe })
+    handleProgress({ style: { done: true } })
+    // Pipe the output stream through the size counter (fire-and-forget;
+    // errors propagate via writer.abort())
+    writer.outputStream.pipeTo(sizeCounter.writable).catch(() => {})
+
     try {
-      const style = await downloader.getStyle()
-      writer = new Writer(style)
-      handleProgress({ style: { done: true } })
-      // Pipe the output stream through the size counter (fire-and-forget;
-      // errors propagate via writer.abort())
-      writer.outputStream.pipeTo(sizeCounter.writable).catch(() => {})
       for await (const spriteInfo of downloader.getSprites()) {
         await writer.addSprite(spriteInfo)
         handleProgress({
@@ -92,6 +102,7 @@ export function download({ bbox, maxzoom, styleUrl, onprogress, accessToken }) {
       handleProgress({ tiles: { ...progress.tiles, done: true } })
 
       const glyphs = downloader.getGlyphs({
+        skipLocalGlyphs,
         onprogress: (glyphStats) =>
           handleProgress({ glyphs: { ...glyphStats, done: false } }),
       })
@@ -100,11 +111,7 @@ export function download({ bbox, maxzoom, styleUrl, onprogress, accessToken }) {
 
       writer.finish()
     } catch (err) {
-      if (writer) {
-        writer.abort(/** @type {Error} */ (err))
-      } else {
-        sizeCounter.writable.abort(/** @type {Error} */ (err))
-      }
+      writer.abort(/** @type {Error} */ (err))
     }
   })()
 

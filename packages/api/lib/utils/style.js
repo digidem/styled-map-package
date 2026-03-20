@@ -112,6 +112,38 @@ function mapArrayExpressionValue(expression, callbackFn) {
 }
 
 /**
+ * PBF glyph ranges rendered client-side by MapLibre GL via
+ * `localIdeographFontFamily` (enabled by default as 'sans-serif'). SMP files
+ * do not need to include glyph data for these ranges. Each entry is a
+ * half-open interval [start, end) of PBF range start codepoints.
+ *
+ * Based on `codePointUsesLocalIdeographFontFamily()` in MapLibre GL JS.
+ * Only ranges where the ENTIRE 256-codepoint PBF range is locally rendered
+ * are listed here; partially-local ranges are conservatively kept as required.
+ */
+export const LOCAL_GLYPH_RANGES = [
+  [0x3000, 0x3400], // CJK Symbols, Hiragana, Katakana, Bopomofo, CJK Strokes, Enclosed CJK, CJK Compat
+  [0x3400, 0x4e00], // CJK Unified Ideographs Extension A
+  [0x4e00, 0xa000], // CJK Unified Ideographs
+  [0xa000, 0xa400], // Yi Syllables + Yi Radicals
+  [0xac00, 0xd800], // Hangul Syllables + Hangul Jamo Extended-B
+  [0xf900, 0xfb00], // CJK Compatibility Ideographs
+  [0xff00, 0x10000], // Halfwidth and Fullwidth Forms
+]
+
+/**
+ * Check whether a PBF glyph range (identified by its start codepoint) is
+ * rendered client-side by MapLibre GL and does not need a server-side PBF file.
+ * @param {number} rangeStart
+ * @returns {boolean}
+ */
+export function isLocallyRenderedRange(rangeStart) {
+  return LOCAL_GLYPH_RANGES.some(
+    ([start, end]) => rangeStart >= start && rangeStart < end,
+  )
+}
+
+/**
  * @typedef {object} TileJSONPartial
  * @property {string[]} tiles
  * @property {string} [description]

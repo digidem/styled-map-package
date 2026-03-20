@@ -15,6 +15,7 @@ import { clone, noop } from './utils/misc.js'
 import {
   assertTileJSON,
   isInlinedSource,
+  isLocallyRenderedRange,
   mapFontStacks,
   validateStyle,
 } from './utils/style.js'
@@ -193,9 +194,10 @@ export class StyleDownloader {
    *
    * @param {object} opts
    * @param {(progress: GlyphDownloadStats) => void} [opts.onprogress]
+   * @param {boolean} [opts.skipLocalGlyphs] Skip glyph ranges rendered client-side by MapLibre GL via localIdeographFontFamily (CJK, Hangul, Kana, Yi, etc.)
    * @returns {AsyncGenerator<[ReadableStream<Uint8Array>, GlyphInfo]>}
    */
-  async *getGlyphs({ onprogress = noop } = {}) {
+  async *getGlyphs({ onprogress = noop, skipLocalGlyphs = false } = {}) {
     const style = await this.getStyle()
     if (!style.glyphs) return
 
@@ -231,6 +233,7 @@ export class StyleDownloader {
 
     for (const [font, fontStack] of fontStacks.entries()) {
       for (let i = 0; i < Math.pow(2, 16); i += 256) {
+        if (skipLocalGlyphs && isLocallyRenderedRange(i)) continue
         /** @type {GlyphRange} */
         const range = `${i}-${i + 255}`
         const url = glyphUrl
