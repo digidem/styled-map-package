@@ -25,13 +25,14 @@ smp download https://demotiles.maplibre.org/style.json \
 
 **Options:**
 
-| Option                 | Description                                                  |
-| ---------------------- | ------------------------------------------------------------ |
-| `-o, --output <file>`  | Output file (writes to stdout if omitted)                    |
-| `-b, --bbox <w,s,e,n>` | Bounding box (west, south, east, north)                      |
-| `-z, --zoom <number>`  | Max zoom level (0-22)                                        |
-| `-t, --token <token>`  | Mapbox access token (required for Mapbox styles)             |
-| `-d, --dedupe`         | Deduplicate tiles with identical content to reduce file size |
+| Option                 | Description                                                       |
+| ---------------------- | ----------------------------------------------------------------- |
+| `-o, --output <file>`  | Output file (writes to stdout if omitted)                         |
+| `-b, --bbox <w,s,e,n>` | Bounding box (west, south, east, north)                           |
+| `-z, --zoom <number>`  | Max zoom level (0-22)                                             |
+| `-t, --token <token>`  | Mapbox access token (required for Mapbox styles)                  |
+| `-d, --dedupe`         | Deduplicate tiles with identical content to reduce file size      |
+| `--skip-local-glyphs`  | Skip CJK/Hangul/Kana glyph ranges rendered locally by MapLibre GL |
 
 When run interactively, missing options are prompted for.
 

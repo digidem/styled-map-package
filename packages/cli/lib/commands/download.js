@@ -57,6 +57,7 @@ export function parseUrl(url) {
  * @property {number | undefined} zoom
  * @property {string | undefined} output
  * @property {string | undefined} token
+ * @property {boolean | undefined} skipLocalGlyphs
  * @property {boolean | undefined} dedupe
  */
 
@@ -76,7 +77,7 @@ export function parseUrl(url) {
  * @param {DownloadDeps} deps
  */
 export async function runDownload(
-  { styleUrl, bbox, zoom, output, token, dedupe },
+  { styleUrl, bbox, zoom, output, token, skipLocalGlyphs, dedupe },
   deps,
 ) {
   const { download, prompt, isMapboxURL, mapboxApiUrl, isTTY } = deps
@@ -178,6 +179,7 @@ export async function runDownload(
     styleUrl,
     onprogress: (/** @type {any} */ p) => reporter.write(p),
     accessToken: token,
+    skipLocalGlyphs,
     dedupe,
   })
   const outputStream = deps.createOutputStream(output)

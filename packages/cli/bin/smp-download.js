@@ -34,26 +34,35 @@ program
     'Mapbox access token (necessary for Mapbox styles)',
   )
   .option(
+    '--skip-local-glyphs',
+    'Skip CJK/Hangul/Kana glyph ranges rendered locally by MapLibre GL',
+  )
+  .option(
     '-d, --dedupe',
     'deduplicate tiles with identical content to reduce file size',
   )
   .argument('[styleUrl]', 'URL to style to download', parseUrl)
-  .action(async (styleUrl, { bbox, zoom, output, token, dedupe }) => {
-    await runDownload(
-      { styleUrl, bbox, zoom, output, token, dedupe },
-      {
-        download,
-        prompt: { input, number },
-        createOutputStream: (output) =>
-          output
-            ? Writable.toWeb(fs.createWriteStream(output))
-            : Writable.toWeb(process.stdout),
-        reporter: ttyReporter,
-        isMapboxURL,
-        mapboxApiUrl: MAPBOX_API_URL,
-        isTTY: !!process.stdout.isTTY,
-      },
-    )
-  })
+  .action(
+    async (
+      styleUrl,
+      { bbox, zoom, output, token, skipLocalGlyphs, dedupe },
+    ) => {
+      await runDownload(
+        { styleUrl, bbox, zoom, output, token, skipLocalGlyphs, dedupe },
+        {
+          download,
+          prompt: { input, number },
+          createOutputStream: (output) =>
+            output
+              ? Writable.toWeb(fs.createWriteStream(output))
+              : Writable.toWeb(process.stdout),
+          reporter: ttyReporter,
+          isMapboxURL,
+          mapboxApiUrl: MAPBOX_API_URL,
+          isTTY: !!process.stdout.isTTY,
+        },
+      )
+    },
+  )
 
 program.parseAsync(process.argv)

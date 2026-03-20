@@ -2,6 +2,7 @@ import { ZipReader } from '@gmaclennan/zip-reader'
 import SphericalMercator from '@mapbox/sphericalmercator'
 import { expressions, validateStyleMin } from '@maplibre/maplibre-gl-style-spec'
 
+import { isLocallyRenderedRange } from './utils/style.js'
 import { STYLE_FILE, URI_BASE, VERSION_FILE } from './utils/templates.js'
 
 /** Major version(s) supported by this implementation */
@@ -597,12 +598,17 @@ function validateGlyphs(style, entries, error, warn) {
   }
 
   // §6.6: Per-fontstack glyph range completeness
+  // Ranges rendered client-side by MapLibre's localIdeographFontFamily
+  // (CJK, Hangul, Kana, Yi, etc.) are excluded from the expected count.
   if (!hasPlaceholders) return
   const fontStacks = collectFontStacks(style.layers || [])
   for (const fontStack of fontStacks) {
     let presentCount = 0
+    let expectedCount = 0
     for (let i = 0; i < TOTAL_GLYPH_RANGES; i++) {
       const start = i * 256
+      if (isLocallyRenderedRange(start)) continue
+      expectedCount++
       const range = `${start}-${start + 255}`
       const path = glyphTemplate
         .replace('{fontstack}', fontStack)
@@ -615,10 +621,10 @@ function validateGlyphs(style, entries, error, warn) {
         `No glyph files found for font "${fontStack}"`,
         'glyphs',
       )
-    } else if (presentCount < TOTAL_GLYPH_RANGES) {
+    } else if (presentCount < expectedCount) {
       warn(
         'incomplete_font_glyphs',
-        `Font "${fontStack}" has ${presentCount} of ${TOTAL_GLYPH_RANGES} glyph ranges (all ${TOTAL_GLYPH_RANGES} recommended for offline use)`,
+        `Font "${fontStack}" has ${presentCount} of ${expectedCount} required glyph ranges (${TOTAL_GLYPH_RANGES - expectedCount} CJK/Hangul/Kana ranges are rendered locally by MapLibre)`,
         'glyphs',
       )
     }
