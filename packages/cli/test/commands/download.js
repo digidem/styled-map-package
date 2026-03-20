@@ -288,6 +288,26 @@ describe('runDownload', () => {
     expect(deps.createOutputStream).toHaveBeenCalledWith('mymap.smp')
   })
 
+  test('passes dedupe option to download', async () => {
+    const deps = makeDeps()
+
+    await runDownload(
+      {
+        styleUrl: 'https://example.com/style.json',
+        bbox: [11, 47, 12, 47.5],
+        zoom: 5,
+        output: 'out.smp',
+        token: undefined,
+        dedupe: true,
+      },
+      deps,
+    )
+
+    expect(deps.download).toHaveBeenCalledWith(
+      expect.objectContaining({ dedupe: true }),
+    )
+  })
+
   test('prompts for output when TTY and missing required args', async () => {
     const deps = makeDeps({ isTTY: true })
     deps.prompt.input

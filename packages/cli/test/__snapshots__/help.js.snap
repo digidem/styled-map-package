@@ -33,6 +33,8 @@ Options:
                                       styles)
   --skip-local-glyphs                 Skip CJK/Hangul/Kana glyph ranges
                                       rendered locally by MapLibre GL
+  -d, --dedupe                        deduplicate tiles with identical content
+                                      to reduce file size
   -h, --help                          display help for command
 "
 `;

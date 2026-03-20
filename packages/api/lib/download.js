@@ -24,6 +24,7 @@ import { Writer } from './writer.js'
  * @param { (progress: DownloadProgress) => void } [opts.onprogress] Optional callback for reporting progress
  * @param {string} [opts.accessToken]
  * @param {boolean} [opts.skipLocalGlyphs] Skip glyph ranges rendered client-side by MapLibre GL via localIdeographFontFamily (CJK, Hangul, Kana, Yi, etc.)
+ * @param {boolean} [opts.dedupe] When true, duplicate tiles are stored only once (see {@link Writer})
  * @returns {import('./types.js').DownloadStream} Readable stream of the output styled map file
  */
 export function download({
@@ -33,6 +34,7 @@ export function download({
   onprogress,
   accessToken,
   skipLocalGlyphs,
+  dedupe,
 }) {
   const downloader = new StyleDownloader(styleUrl, {
     concurrency: 24,
@@ -73,7 +75,7 @@ export function download({
 
   ;(async () => {
     const style = await downloader.getStyle()
-    const writer = new Writer(style)
+    const writer = new Writer(style, { dedupe: !!dedupe })
     handleProgress({ style: { done: true } })
     // Pipe the output stream through the size counter (fire-and-forget;
     // errors propagate via writer.abort())
