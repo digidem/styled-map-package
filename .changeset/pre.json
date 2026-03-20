@@ -4,7 +4,7 @@
   "initialVersions": {
     "styled-map-package-api": "4.1.0",
     "styled-map-package": "4.1.0",
-    "smp-noto-glyphs": "1.0.0"
+    "smp-noto-glyphs": "0.0.0"
   },
   "changesets": [
     "all-peas-unite",
