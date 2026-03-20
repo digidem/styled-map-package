@@ -1,3 +1,4 @@
+import { migrate } from '@maplibre/maplibre-gl-style-spec'
 import { check as checkGeoJson } from '@placemarkio/check-geojson'
 import { includeKeys } from 'filter-obj'
 import ky from 'ky'
@@ -59,10 +60,13 @@ export class StyleDownloader {
       this.#mapboxAccessToken =
         searchParams.get('access_token') || mapboxAccessToken
       this.#styleURL = normalizeStyleURL(style, this.#mapboxAccessToken)
-    } else if (validateStyle(style)) {
-      this.#inputStyle = clone(style)
     } else {
-      throw new AggregateError(validateStyle.errors, 'Invalid style')
+      // Migrate actually mutates the input, so we act on a clone.
+      const styleV8 = migrate(clone(style))
+      if (!validateStyle(styleV8)) {
+        throw new AggregateError(validateStyle.errors, 'Invalid style')
+      }
+      this.#inputStyle = styleV8
     }
     this.#fetchQueue = new FetchQueue(concurrency)
   }
@@ -82,13 +86,11 @@ export class StyleDownloader {
   async getStyle() {
     if (!this.#inputStyle && this.#styleURL) {
       const downloadedStyle = await ky(this.#styleURL).json()
-      if (!validateStyle(downloadedStyle)) {
-        throw new AggregateError(
-          validateStyle.errors,
-          'Invalid style: ' + this.#styleURL,
-        )
+      const styleV8 = migrate(downloadedStyle)
+      if (!validateStyle(styleV8)) {
+        throw new AggregateError(validateStyle.errors, 'Invalid style')
       }
-      this.#inputStyle = downloadedStyle
+      this.#inputStyle = styleV8
     } else if (!this.#inputStyle) {
       throw new Error('Unexpected state: no style or style URL provided')
     }
