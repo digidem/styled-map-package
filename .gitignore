@@ -27,11 +27,8 @@ Thumbs.db
 # SMP artifacts from testing
 /*.smp
 
-# Git LFS hooks (auto-created by `git lfs install`)
-.husky/post-checkout
-.husky/post-commit
-.husky/post-merge
-.husky/pre-push
+# Large test fixtures (download from https://files.awana.digital/test-fixtures/)
+packages/api/test/fixtures/openfreemap-z6.smp
 
 # Published directory for npm
 dist/
