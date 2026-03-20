@@ -31,6 +31,8 @@ Options:
   -z, --zoom <number>                 max zoom level to download
   -t, --token <token>                 Mapbox access token (necessary for Mapbox
                                       styles)
+  -d, --dedupe                        deduplicate tiles with identical content
+                                      to reduce file size
   -h, --help                          display help for command
 "
 `;
