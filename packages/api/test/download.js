@@ -4,7 +4,8 @@ import { afterAll, assert, beforeAll, describe, expect, test } from 'vitest'
 
 import { fileURLToPath } from 'node:url'
 
-import { download, Reader } from '../lib/index.js'
+import { download } from '../lib/download.js'
+import { Reader } from '../lib/reader.js'
 import { startSMPServer } from './utils/smp-server.js'
 import { streamToBuffer } from './utils/stream-consumers.js'
 
