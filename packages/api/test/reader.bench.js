@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 
 import { Reader } from '../lib/reader.js'
 
+// Download from https://files.awana.digital/test-fixtures/openfreemap-z6.smp
 const FIXTURE = resolve('test/fixtures/openfreemap-z6.smp')
 
 /**

@@ -12,7 +12,7 @@
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "npm run build --workspaces --if-present && changeset publish",
-    "prepare": "husky && (git lfs install 2>/dev/null || echo 'Warning: git-lfs not found. Install it to work with large test fixtures.')"
+    "prepare": "husky"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.6.0",
