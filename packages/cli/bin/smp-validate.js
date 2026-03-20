@@ -14,8 +14,21 @@ program
 
     if (result.valid) {
       console.log(logSymbols.success, chalk.green('Valid SMP file'))
+    } else if (result.usable) {
+      console.log(
+        logSymbols.warning,
+        chalk.yellow('SMP file has issues but is usable'),
+      )
     } else {
-      console.log(logSymbols.error, chalk.red('Invalid SMP file'))
+      console.log(logSymbols.error, chalk.red('Invalid SMP file (unusable)'))
+    }
+
+    /** @param {typeof result.issues[number]} issue */
+    const formatIssue = (issue) => {
+      const path = issue.path ? chalk.dim(`[${issue.path}] `) : ''
+      const sev =
+        issue.severity !== 'spec' ? chalk.dim(` (${issue.severity})`) : ''
+      return `${path}${issue.message}${sev}`
     }
 
     const issueErrors = result.issues.filter((i) => i.kind === 'error')
@@ -24,14 +37,14 @@ program
     if (issueErrors.length) {
       console.log('\nErrors:')
       for (const issue of issueErrors) {
-        console.log(`  ${logSymbols.error} ${issue.message}`)
+        console.log(`  ${logSymbols.error} ${formatIssue(issue)}`)
       }
     }
 
     if (issueWarnings.length) {
       console.log('\nWarnings:')
       for (const issue of issueWarnings) {
-        console.log(`  ${logSymbols.warning} ${issue.message}`)
+        console.log(`  ${logSymbols.warning} ${formatIssue(issue)}`)
       }
     }
 
