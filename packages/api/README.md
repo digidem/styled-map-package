@@ -99,9 +99,12 @@ const stream = download({
   styleUrl: 'https://demotiles.maplibre.org/style.json',
   bbox: [-180, -80, 180, 80],
   maxzoom: 5,
+  skipLocalGlyphs: true, // skip CJK/Hangul/Kana ranges rendered locally by MapLibre
 })
 // Pipe the ReadableStream to a file
 ```
+
+The `skipLocalGlyphs` option skips downloading glyph ranges that MapLibre GL renders client-side via [`localIdeographFontFamily`](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/) (CJK, Hangul, Kana, Yi, and Halfwidth/Fullwidth Forms — 163 of 256 ranges). This significantly reduces download size for styles that use these scripts.
 
 ### Converting from MBTiles
 

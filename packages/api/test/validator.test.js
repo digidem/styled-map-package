@@ -728,7 +728,7 @@ describe('validate — glyphs (§6)', () => {
       ],
       glyphs: 'smp://maps.v1/fonts/{fontstack}/{range}.pbf.gz',
     }
-    // Only provide 3 of 256 ranges
+    // Only provide 3 of 93 required (non-locally-rendered) ranges
     const filepath = await createZipFile([
       { name: 'VERSION', data: '1.0\n' },
       { name: 'style.json', data: JSON.stringify(style) },
@@ -748,18 +748,62 @@ describe('validate — glyphs (§6)', () => {
     const result = await validate(filepath)
     assert(hasWarning(result, 'incomplete_font_glyphs'))
     const w = warnings(result).find((i) => i.type === 'incomplete_font_glyphs')
-    assert(w?.message.includes('3 of 256'))
+    // 93 required ranges (256 total minus 163 locally-rendered)
+    assert(w?.message.includes('3 of 93'))
   })
 
-  test('font with near-complete glyph ranges warns', async () => {
-    // Use the demotiles fixture which has 255 of 256 ranges for "Open Sans Semibold"
+  test('locally-rendered CJK/Hangul/Kana ranges are not required', async () => {
+    const style = {
+      version: 8,
+      sources: {},
+      layers: [
+        {
+          id: 'labels',
+          type: 'symbol',
+          source: 'test',
+          layout: {
+            'text-field': '{name}',
+            'text-font': ['Test Font'],
+          },
+        },
+      ],
+      glyphs: 'smp://maps.v1/fonts/{fontstack}/{range}.pbf.gz',
+    }
+    // Provide all 93 non-locally-rendered ranges (skip CJK/Hangul/Kana)
+    const files = [
+      { name: 'VERSION', data: '1.0\n' },
+      { name: 'style.json', data: JSON.stringify(style) },
+    ]
+    for (let i = 0; i < 256; i++) {
+      const start = i * 256
+      // Skip locally-rendered ranges (same ranges as LOCAL_GLYPH_RANGES)
+      if (
+        (start >= 0x3000 && start < 0x3400) ||
+        (start >= 0x3400 && start < 0x4e00) ||
+        (start >= 0x4e00 && start < 0xa000) ||
+        (start >= 0xa000 && start < 0xa400) ||
+        (start >= 0xac00 && start < 0xd800) ||
+        (start >= 0xf900 && start < 0xfb00) ||
+        (start >= 0xff00 && start < 0x10000)
+      )
+        continue
+      files.push({
+        name: `fonts/Test Font/${start}-${start + 255}.pbf.gz`,
+        data: new Uint8Array(8),
+      })
+    }
+    const filepath = await writeTempFile(await createZip(files))
+    const result = await validate(filepath)
+    assert(!hasError(result, 'missing_font_glyphs'))
+    assert(!hasWarning(result, 'incomplete_font_glyphs'))
+  })
+
+  test('demotiles fixture has complete non-CJK glyph coverage', async () => {
+    // demotiles has 255 of 256 total ranges — the missing one should be
+    // a locally-rendered range, so no warning after excluding local ranges
     const result = await validate('test/fixtures/demotiles-z2.smp')
     assert(result.valid, 'fixture should be valid overall')
-    // 255/256 ranges should produce a warning
-    assert(hasWarning(result, 'incomplete_font_glyphs'))
-    const w = warnings(result).find((i) => i.type === 'incomplete_font_glyphs')
-    assert(w?.message.includes('Open Sans Semibold'))
-    assert(w?.message.includes('255 of 256'))
+    assert(!hasWarning(result, 'incomplete_font_glyphs'))
   })
 
   test('expression-based text-font fontstacks are checked', async () => {
