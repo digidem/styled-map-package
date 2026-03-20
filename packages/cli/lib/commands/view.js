@@ -3,6 +3,7 @@
  * @property {number} port
  * @property {string} filepath
  * @property {boolean} [open]
+ * @property {boolean} [fallback]
  */
 
 /**
@@ -13,6 +14,8 @@
  * @property {(url: string) => Promise<void>} openApp
  * @property {(url: string) => void} log
  * @property {(url: string) => Promise<Uint8Array>} readViewerHtml
+ * @property {(tileId: any, sourceInfo: any) => Response} [emptyTileFallback]
+ * @property {(fontstack: string, range: string) => Response} [emptyGlyphFallback]
  */
 
 /**
@@ -20,11 +23,17 @@
  * @param {ViewDeps} deps
  * @returns {Promise<string>} The address the server is listening on
  */
-export async function runView({ port, filepath, open }, deps) {
+export async function runView({ port, filepath, open, fallback }, deps) {
   const { Reader, createServer, openApp, log, readViewerHtml } = deps
 
   const reader = new Reader(filepath)
-  const smpServer = createServer({ base: '/map' })
+  const smpServer = createServer({
+    base: '/map',
+    ...(fallback && {
+      fallbackTile: deps.emptyTileFallback,
+      fallbackGlyph: deps.emptyGlyphFallback,
+    }),
+  })
 
   /** @param {Request} request */
   const handler = async (request) => {

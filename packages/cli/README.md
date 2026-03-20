@@ -44,10 +44,13 @@ smp view demotiles.smp --open
 
 **Options:**
 
-| Option                | Description                      |
-| --------------------- | -------------------------------- |
-| `-o, --open`          | Open in the default web browser  |
-| `-p, --port <number>` | Port to serve on (default: 3000) |
+| Option                | Description                                                       |
+| --------------------- | ----------------------------------------------------------------- |
+| `-o, --open`          | Open in the default web browser                                   |
+| `-p, --port <number>` | Port to serve on (default: 3000)                                  |
+| `-f, --fallback`      | Serve empty tiles and glyphs for missing resources instead of 404 |
+
+The `--fallback` flag is useful for previewing SMP files that don't contain every tile or glyph range referenced by the style. Missing vector tiles are served as empty MVTs, missing raster tiles as transparent pixels. Missing glyph ranges are served using bundled [Noto Sans](https://fonts.google.com/noto/specimen/Noto+Sans) glyphs (via [GoNotoKurrent](https://github.com/satbyy/go-noto-universal), covering 80+ scripts including Latin, Cyrillic, Greek, Arabic, Hebrew, Devanagari, Thai, and more). CJK and Hangul ranges are not bundled since MapLibre renders these client-side via `localIdeographFontFamily`.
 
 ### `smp mbtiles`
 
