@@ -3,34 +3,28 @@
   "version": "1.0.0",
   "description": "Pre-built Noto Sans SDF glyph PBFs (80+ scripts) for MapLibre-compatible map servers",
   "type": "module",
-  "main": "./dist/noto.cjs",
-  "module": "./dist/noto.js",
+  "main": "./lib/noto.js",
   "types": "./dist/noto.d.ts",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/noto.d.ts",
-        "default": "./dist/noto.js"
-      },
-      "require": {
-        "types": "./dist/noto.d.cts",
-        "default": "./dist/noto.cjs"
-      }
+      "types": "./dist/noto.d.ts",
+      "default": "./lib/noto.js"
     },
     "./package.json": "./package.json"
   },
   "files": [
+    "lib",
     "dist",
     "fixtures"
   ],
   "scripts": {
     "test": "vitest run",
-    "build": "tsup",
+    "prepack": "npm run build",
+    "build": "tsc -p tsconfig.build.json",
     "types": "tsc"
   },
   "devDependencies": {
     "@types/node": "^18.19.130",
-    "tsup": "^8.4.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   },
