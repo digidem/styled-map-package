@@ -1,6 +1,6 @@
 {
   "name": "smp-noto-glyphs",
-  "version": "0.0.0",
+  "version": "1.0.0-pre.0",
   "description": "Pre-built Noto Sans SDF glyph PBFs (80+ scripts) for MapLibre-compatible map servers",
   "type": "module",
   "main": "./lib/noto.js",
