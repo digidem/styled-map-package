@@ -19,7 +19,7 @@
   "license": "MIT",
   "dependencies": {
     "styled-map-package-api": "^5.0.0-pre.3",
-    "smp-noto-glyphs": "^1.0.0",
+    "smp-noto-glyphs": "^0.0.0",
     "@inquirer/prompts": "^6.0.1",
     "@whatwg-node/server": "^0.10.17",
     "chalk": "^5.4.1",
