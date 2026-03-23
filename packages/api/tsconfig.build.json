@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "rootDir": "lib",
+    "outDir": "dist"
+  },
+  "include": ["lib", "types"]
+}

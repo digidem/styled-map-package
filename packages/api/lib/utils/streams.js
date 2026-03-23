@@ -8,9 +8,9 @@
  * @returns {ReadableStream<T>}
  */
 export function readableFromAsync(iterable) {
-  // @ts-expect-error - types are from node 18
+  // @ts-ignore - ReadableStream.from() exists in Node 20+ but not in DOM types
   if (typeof ReadableStream.from === 'function') {
-    // @ts-expect-error - types are from node 18
+    // @ts-ignore
     return ReadableStream.from(iterable)
   }
   const iterator = iterable[Symbol.asyncIterator]()

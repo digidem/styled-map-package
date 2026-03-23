@@ -3,130 +3,64 @@
   "version": "5.0.0-pre.3",
   "description": "JavaScript API for reading, writing, and serving Styled Map Package (.smp) files",
   "type": "module",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
+  "main": "./lib/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "types": "./dist/index.d.ts",
+      "default": "./lib/index.js"
     },
     "./reader": {
-      "import": {
-        "types": "./dist/reader.d.ts",
-        "default": "./dist/reader.js"
-      },
-      "require": {
-        "types": "./dist/reader.d.cts",
-        "default": "./dist/reader.cjs"
-      }
+      "types": "./dist/reader.d.ts",
+      "default": "./lib/reader.js"
     },
     "./writer": {
-      "import": {
-        "types": "./dist/writer.d.ts",
-        "default": "./dist/writer.js"
-      },
-      "require": {
-        "types": "./dist/writer.d.cts",
-        "default": "./dist/writer.cjs"
-      }
+      "types": "./dist/writer.d.ts",
+      "default": "./lib/writer.js"
     },
     "./server": {
-      "import": {
-        "types": "./dist/server.d.ts",
-        "default": "./dist/server.js"
-      },
-      "require": {
-        "types": "./dist/server.d.cts",
-        "default": "./dist/server.cjs"
-      }
+      "types": "./dist/server.d.ts",
+      "default": "./lib/server.js"
     },
     "./style-downloader": {
-      "import": {
-        "types": "./dist/style-downloader.d.ts",
-        "default": "./dist/style-downloader.js"
-      },
-      "require": {
-        "types": "./dist/style-downloader.d.cts",
-        "default": "./dist/style-downloader.cjs"
-      }
+      "types": "./dist/style-downloader.d.ts",
+      "default": "./lib/style-downloader.js"
     },
     "./tile-downloader": {
-      "import": {
-        "types": "./dist/tile-downloader.d.ts",
-        "default": "./dist/tile-downloader.js"
-      },
-      "require": {
-        "types": "./dist/tile-downloader.d.cts",
-        "default": "./dist/tile-downloader.cjs"
-      }
+      "types": "./dist/tile-downloader.d.ts",
+      "default": "./lib/tile-downloader.js"
     },
     "./download": {
-      "import": {
-        "types": "./dist/download.d.ts",
-        "default": "./dist/download.js"
-      },
-      "require": {
-        "types": "./dist/download.d.cts",
-        "default": "./dist/download.cjs"
-      }
+      "types": "./dist/download.d.ts",
+      "default": "./lib/download.js"
     },
     "./from-mbtiles": {
-      "import": {
-        "types": "./dist/from-mbtiles.d.ts",
-        "default": "./dist/from-mbtiles.js"
-      },
-      "require": {
-        "types": "./dist/from-mbtiles.d.cts",
-        "default": "./dist/from-mbtiles.cjs"
-      }
+      "types": "./dist/from-mbtiles.d.ts",
+      "default": "./lib/from-mbtiles.js"
     },
     "./fallbacks": {
-      "import": {
-        "types": "./dist/fallbacks.d.ts",
-        "default": "./dist/fallbacks.js"
-      },
-      "require": {
-        "types": "./dist/fallbacks.d.cts",
-        "default": "./dist/fallbacks.cjs"
-      }
+      "types": "./dist/fallbacks.d.ts",
+      "default": "./lib/fallbacks.js"
     },
     "./validator": {
-      "import": {
-        "types": "./dist/validator.d.ts",
-        "default": "./dist/validator.js"
-      },
-      "require": {
-        "types": "./dist/validator.d.cts",
-        "default": "./dist/validator.cjs"
-      }
+      "types": "./dist/validator.d.ts",
+      "default": "./lib/validator.js"
     },
     "./utils/mapbox": {
-      "import": {
-        "types": "./dist/utils/mapbox.d.ts",
-        "default": "./dist/utils/mapbox.js"
-      },
-      "require": {
-        "types": "./dist/utils/mapbox.d.cts",
-        "default": "./dist/utils/mapbox.cjs"
-      }
+      "types": "./dist/utils/mapbox.d.ts",
+      "default": "./lib/utils/mapbox.js"
     },
     "./package.json": "./package.json"
   },
   "files": [
+    "lib",
     "dist"
   ],
   "scripts": {
     "test": "npm run build && npm run types && vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "build": "tsup",
+    "build": "tsc -p tsconfig.build.json",
     "types": "tsc",
     "bench": "vitest bench --project node",
     "prepack": "npm run build"
@@ -163,14 +97,12 @@
     "@vitest/browser": "^3.2.4",
     "@vitest/coverage-v8": "^3.2.4",
     "@whatwg-node/server": "^0.10.17",
-    "esbuild-fix-imports-plugin": "^1.0.20",
     "execa": "^9.4.0",
     "fast-png": "^6.3.0",
     "pixel-stream": "^1.0.3",
     "playwright": "^1.50.1",
     "sharp": "^0.33.5",
     "tempy": "^3.1.0",
-    "tsup": "^8.4.0",
     "type-fest": "^4.35.0",
     "typescript": "^5.9.3",
     "vite": "^6.4.1",
