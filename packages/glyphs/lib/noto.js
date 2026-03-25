@@ -19,14 +19,14 @@ const GLYPHS_DIR = fileURLToPath(new URL('../fixtures/glyphs', import.meta.url))
 const cache = new Map()
 
 /**
- * Read a PBF glyph range file, returning the cached buffer or null if not found.
+ * Read a gzipped PBF glyph range file, returning the cached buffer or null if not found.
  * @param {string} range
  * @returns {Uint8Array | null}
  */
 function getGlyphPbf(range) {
   if (cache.has(range))
     return /** @type {Uint8Array | null} */ (cache.get(range))
-  const filePath = path.join(GLYPHS_DIR, `${range}.pbf`)
+  const filePath = path.join(GLYPHS_DIR, `${range}.pbf.gz`)
   try {
     const data = fs.readFileSync(filePath)
     cache.set(range, data)
@@ -42,6 +42,9 @@ function getGlyphPbf(range) {
  * glyph ranges for common scripts, and empty PBFs for uncommon/CJK ranges
  * (which MapLibre renders client-side via `localIdeographFontFamily`).
  *
+ * All responses are gzip-encoded — both pre-built ranges (stored as .pbf.gz)
+ * and empty fallbacks. Fixtures are stored compressed to reduce package size.
+ *
  * Covers 80+ scripts including Latin, Cyrillic, Greek, Arabic, Hebrew,
  * Devanagari, Thai, and more. See https://github.com/satbyy/go-noto-universal
  *
@@ -52,24 +55,13 @@ function getGlyphPbf(range) {
  * @returns {Response}
  */
 export function notoGlyphFallback(_fontstack, range) {
-  const pbf = getGlyphPbf(range)
-  if (pbf) {
-    return new Response(/** @type {any} */ (pbf), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/x-protobuf',
-        'Content-Length': String(pbf.byteLength),
-        'Cache-Control': 'public, max-age=604800',
-      },
-    })
-  }
-  // No pre-built PBF for this range — serve empty gzipped PBF
-  return new Response(/** @type {any} */ (EMPTY_GZ), {
+  const gz = getGlyphPbf(range) ?? EMPTY_GZ
+  return new Response(gz, {
     status: 200,
     headers: {
       'Content-Type': 'application/x-protobuf',
       'Content-Encoding': 'gzip',
-      'Content-Length': String(EMPTY_GZ.byteLength),
+      'Content-Length': String(gz.byteLength),
       'Cache-Control': 'public, max-age=604800',
     },
   })
