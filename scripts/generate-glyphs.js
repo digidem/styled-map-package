@@ -27,6 +27,7 @@ import https from 'node:https'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { gzipSync } from 'node:zlib'
 
 import { LOCAL_GLYPH_RANGES } from '../packages/api/lib/utils/style.js'
 
@@ -142,7 +143,7 @@ async function main() {
 
     // Clean existing PBF files
     for (const f of fs.readdirSync(OUTPUT_DIR)) {
-      if (f.endsWith('.pbf')) {
+      if (f.endsWith('.pbf') || f.endsWith('.pbf.gz')) {
         fs.unlinkSync(path.join(OUTPUT_DIR, f))
       }
     }
@@ -170,10 +171,13 @@ async function main() {
       if (excluded || data.length <= MIN_GLYPH_SIZE) {
         skippedCount++
       } else {
-        fs.copyFileSync(src, path.join(OUTPUT_DIR, filename))
-        totalSize += data.length
+        const gz = gzipSync(data)
+        fs.writeFileSync(path.join(OUTPUT_DIR, `${filename}.gz`), gz)
+        totalSize += gz.length
         copiedCount++
-        console.log(`  ${filename} (${(data.length / 1024).toFixed(1)} KB)`)
+        console.log(
+          `  ${filename}.gz (${(gz.length / 1024).toFixed(1)} KB, ${((1 - gz.length / data.length) * 100).toFixed(0)}% smaller)`,
+        )
       }
     }
 
