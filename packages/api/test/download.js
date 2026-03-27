@@ -140,6 +140,61 @@ describe('download with demotiles-z2 (glyphs, no sprites)', () => {
       await expect(() => streamToBuffer(smpStream)).rejects.toThrow()
     },
   )
+
+  test('download rejects immediately when signal is already aborted', async () => {
+    const smpStream = download({
+      styleUrl: server.baseUrl + 'style.json',
+      bbox: [-180, -85, 180, 85],
+      maxzoom: 0,
+      signal: AbortSignal.abort('already cancelled'),
+    })
+
+    await expect(() => streamToBuffer(smpStream)).rejects.toThrow(
+      'already cancelled',
+    )
+  })
+
+  test('download can be cancelled with AbortSignal', async () => {
+    const ac = new AbortController()
+    /** @type {import('../lib/download.js').DownloadProgress[]} */
+    const progressUpdates = []
+    const smpStream = download({
+      styleUrl: server.baseUrl + 'style.json',
+      bbox: [-180, -85, 180, 85],
+      maxzoom: 2,
+      signal: ac.signal,
+      onprogress: (p) => {
+        progressUpdates.push(structuredClone(p))
+        // Abort after the style is downloaded but before everything completes
+        if (p.style.done) ac.abort()
+      },
+    })
+
+    await expect(() => streamToBuffer(smpStream)).rejects.toThrow()
+
+    // Should have received some progress before cancellation
+    assert(progressUpdates.length > 0, 'received progress updates')
+    assert.equal(
+      progressUpdates[progressUpdates.length - 1].style.done,
+      true,
+      'style was downloaded before abort',
+    )
+  })
+
+  test('download stream can be cancelled via reader.cancel()', async () => {
+    const smpStream = download({
+      styleUrl: server.baseUrl + 'style.json',
+      bbox: [-180, -85, 180, 85],
+      maxzoom: 2,
+    })
+
+    const reader = smpStream.getReader()
+    // Read one chunk then cancel
+    const { done } = await reader.read()
+    assert.equal(done, false, 'first read returns data')
+    await reader.cancel('no longer needed')
+    // Should not throw or hang — cancel cleans up gracefully
+  })
 })
 
 describe('download with osm-bright-z6 (sprites)', () => {

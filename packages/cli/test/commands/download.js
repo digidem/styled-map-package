@@ -230,7 +230,7 @@ describe('runDownload', () => {
       expect.objectContaining({ message: 'Mapbox access token' }),
     )
     expect(deps.download).toHaveBeenCalledWith(
-      expect.objectContaining({ accessToken: 'pk.test-token' }),
+      expect.objectContaining({ mapboxAccessToken: 'pk.test-token' }),
     )
   })
 
@@ -250,7 +250,7 @@ describe('runDownload', () => {
 
     expect(deps.prompt.input).not.toHaveBeenCalled()
     expect(deps.download).toHaveBeenCalledWith(
-      expect.objectContaining({ accessToken: 'pk.existing-token' }),
+      expect.objectContaining({ mapboxAccessToken: 'pk.existing-token' }),
     )
   })
 

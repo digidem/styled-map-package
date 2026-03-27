@@ -1,4 +1,5 @@
 import { StyleDownloader } from './style-downloader.js'
+import { noop } from './utils/misc.js'
 import { readableFromAsync } from './utils/streams.js'
 import { Writer } from './writer.js'
 
@@ -22,9 +23,10 @@ import { Writer } from './writer.js'
  * @param {number} opts.maxzoom Max zoom level to download tiles for
  * @param {string} opts.styleUrl URL of the style to download
  * @param { (progress: DownloadProgress) => void } [opts.onprogress] Optional callback for reporting progress
- * @param {string} [opts.accessToken]
+ * @param {string} [opts.mapboxAccessToken]
  * @param {boolean} [opts.skipLocalGlyphs] Skip glyph ranges rendered client-side by MapLibre GL via localIdeographFontFamily (CJK, Hangul, Kana, Yi, etc.)
  * @param {boolean} [opts.dedupe] When true, duplicate tiles are stored only once (see {@link Writer})
+ * @param {AbortSignal} [opts.signal] AbortSignal to cancel the download
  * @returns {import('./types.js').DownloadStream} Readable stream of the output styled map file
  */
 export function download({
@@ -32,14 +34,19 @@ export function download({
   maxzoom,
   styleUrl,
   onprogress,
-  accessToken,
+  mapboxAccessToken,
   skipLocalGlyphs,
   dedupe,
+  signal: signalExt,
 }) {
-  const downloader = new StyleDownloader(styleUrl, {
-    concurrency: 24,
-    mapboxAccessToken: accessToken,
-  })
+  /** @type {ReadableStreamDefaultReader<Uint8Array> | undefined} */
+  let outputReader
+  /** @type {Promise<void> | undefined} */
+  let downloadDone
+  const pipeAbort = new AbortController()
+  const signal = signalExt
+    ? AbortSignal.any([signalExt, pipeAbort.signal])
+    : pipeAbort.signal
 
   let start = Date.now()
   /** @type {DownloadProgress} */
@@ -58,68 +65,97 @@ export function download({
     onprogress?.(progress)
   }
 
-  const sizeCounter = new TransformStream({
-    transform(chunk, controller) {
-      handleProgress({
-        output: {
-          totalBytes: progress.output.totalBytes + chunk.byteLength,
-          done: false,
-        },
+  return new ReadableStream({
+    async start() {
+      if (signal?.aborted) {
+        throw (
+          signal.reason ||
+          new DOMException('The operation was aborted.', 'AbortError')
+        )
+      }
+
+      const downloader = new StyleDownloader(styleUrl, {
+        concurrency: 24,
+        mapboxAccessToken,
       })
-      controller.enqueue(chunk)
+
+      const style = await downloader.getStyle()
+      handleProgress({ style: { done: true } })
+
+      const writer = new Writer(style, { dedupe: !!dedupe })
+      outputReader = writer.outputStream.getReader()
+
+      downloadDone = (async () => {
+        try {
+          for await (const spriteInfo of downloader.getSprites()) {
+            await writer.addSprite(spriteInfo)
+            handleProgress({
+              sprites: {
+                downloaded: progress.sprites.downloaded + 1,
+                done: false,
+              },
+            })
+          }
+          handleProgress({ sprites: { ...progress.sprites, done: true } })
+
+          const tiles = downloader.getTiles({
+            bounds: bbox,
+            maxzoom,
+            onprogress: (tileStats) =>
+              handleProgress({ tiles: { ...tileStats, done: false } }),
+          })
+          await readableFromAsync(tiles).pipeTo(
+            writer.createTileWriteStream({ concurrency: 24 }),
+            { signal },
+          )
+          handleProgress({ tiles: { ...progress.tiles, done: true } })
+
+          const glyphs = downloader.getGlyphs({
+            skipLocalGlyphs,
+            onprogress: (glyphStats) =>
+              handleProgress({ glyphs: { ...glyphStats, done: false } }),
+          })
+          await readableFromAsync(glyphs).pipeTo(
+            writer.createGlyphWriteStream(),
+            { signal },
+          )
+          handleProgress({ glyphs: { ...progress.glyphs, done: true } })
+
+          await writer.finish()
+        } catch (err) {
+          try {
+            writer.abort(err instanceof Error ? err : new Error(String(err)))
+          } catch {
+            // Output stream may already be cancelled/errored
+          }
+        }
+      })()
     },
-    flush() {
-      handleProgress({ output: { ...progress.output, done: true } })
+    async pull(controller) {
+      if (!outputReader) {
+        controller.error(
+          new Error('Output reader not initialized. This is a bug.'),
+        )
+        return
+      }
+      const { done, value } = await outputReader.read()
+      if (done) {
+        controller.close()
+        handleProgress({ output: { ...progress.output, done: true } })
+      } else {
+        handleProgress({
+          output: {
+            totalBytes: progress.output.totalBytes + value.byteLength,
+            done: false,
+          },
+        })
+        controller.enqueue(value)
+      }
+    },
+    async cancel(reason) {
+      pipeAbort.abort(reason)
+      await downloadDone
+      await outputReader?.cancel(reason).catch(noop)
     },
   })
-
-  ;(async () => {
-    /** @type {Writer | undefined} */
-    let writer
-    try {
-      const style = await downloader.getStyle()
-      writer = new Writer(style, { dedupe: !!dedupe })
-      handleProgress({ style: { done: true } })
-      // Pipe the output stream through the size counter (fire-and-forget;
-      // errors propagate via writer.abort())
-      writer.outputStream.pipeTo(sizeCounter.writable).catch(() => {})
-
-      for await (const spriteInfo of downloader.getSprites()) {
-        await writer.addSprite(spriteInfo)
-        handleProgress({
-          sprites: { downloaded: progress.sprites.downloaded + 1, done: false },
-        })
-      }
-      handleProgress({ sprites: { ...progress.sprites, done: true } })
-
-      const tiles = downloader.getTiles({
-        bounds: bbox,
-        maxzoom,
-        onprogress: (tileStats) =>
-          handleProgress({ tiles: { ...tileStats, done: false } }),
-      })
-      await readableFromAsync(tiles).pipeTo(
-        writer.createTileWriteStream({ concurrency: 24 }),
-      )
-      handleProgress({ tiles: { ...progress.tiles, done: true } })
-
-      const glyphs = downloader.getGlyphs({
-        skipLocalGlyphs,
-        onprogress: (glyphStats) =>
-          handleProgress({ glyphs: { ...glyphStats, done: false } }),
-      })
-      await readableFromAsync(glyphs).pipeTo(writer.createGlyphWriteStream())
-      handleProgress({ glyphs: { ...progress.glyphs, done: true } })
-
-      writer.finish()
-    } catch (err) {
-      if (writer) {
-        writer.abort(/** @type {Error} */ (err))
-      } else {
-        sizeCounter.writable.abort(/** @type {Error} */ (err))
-      }
-    }
-  })()
-
-  return sizeCounter.readable
 }

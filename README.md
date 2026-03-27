@@ -4,12 +4,13 @@ A Styled Map Package (`.smp`) file is a Zip archive containing all the resources
 
 ## Packages
 
-This monorepo contains two packages:
-
 | Package                                   | Description                                                   |
 | ----------------------------------------- | ------------------------------------------------------------- |
 | [`styled-map-package`](packages/cli/)     | CLI for creating, viewing, and converting `.smp` files        |
 | [`styled-map-package-api`](packages/api/) | JavaScript API for reading, writing, and serving `.smp` files |
+| [`smp-noto-glyphs`](packages/glyphs/)     | Pre-built Noto Sans SDF glyph fallbacks for 80+ scripts       |
+
+The [SMP 1.0 specification](spec/1.0/) defines the `.smp` file format.
 
 ## Quick start
 

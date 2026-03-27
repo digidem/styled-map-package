@@ -88,7 +88,7 @@ export function fromMBTiles(source) {
             writer.createTileWriteStream(),
             { signal: pipeAbort.signal },
           )
-          writer.finish()
+          await writer.finish()
         } catch (err) {
           try {
             writer.abort(err instanceof Error ? err : new Error(String(err)))

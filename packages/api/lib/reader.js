@@ -188,7 +188,7 @@ export class Reader {
   #maxResourceSize
 
   /**
-   * @param {string | import('@gmaclennan/zip-reader').ZipReader} filepathOrZip Path to styled map package (`.styledmap`) file, or a ZipReader instance
+   * @param {string | import('@gmaclennan/zip-reader').ZipReader} filepathOrZip Path to styled map package (`.smp`) file, or a ZipReader instance
    * @param {ReaderOptions} [options]
    */
   constructor(filepathOrZip, options = {}) {
