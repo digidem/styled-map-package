@@ -48,7 +48,6 @@ function json(obj) {
  * @example
  * ```js
  * import { createServer } from 'node:http'
- * import { error } from 'itty-router/error'
  * import { createServerAdapter } from '@whatwg-node/server'
  * import { createServer as createSMPServer } from 'styled-map-package-api/server'
  * import { Reader } from 'styled-map-package-api/reader'
@@ -56,7 +55,7 @@ function json(obj) {
  * const reader = new Reader('path/to/your-style.smp')
  * const smpServer = createSMPServer()
  * const httpServer = createServer(createServerAdapter((request) => {
- *   return smpServer.fetch(request, reader).catch(error)
+ *   return smpServer.fetch(request, reader)
  * }))
  * ```
  *
@@ -148,7 +147,7 @@ export function createServer({ base = '/', fallbackTile, fallbackGlyph } = {}) {
       }
     })
   return {
-    fetch: (request, reader) => {
+    fetch: async (request, reader) => {
       return router.fetch(request, reader).catch((err) => {
         if (isFileNotThereError(err)) {
           throw new StatusError(404, 'Not Found')

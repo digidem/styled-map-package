@@ -64,8 +64,8 @@ export const SUPPORTED_SOURCE_TYPES = /** @type {const} */ ([
 
 /**
  * Write a styled map package to a stream. Stream `writer.outputStream` to a
- * destination, e.g. `fs.createWriteStream('my-map.styledmap')`. You must call
- * `witer.finish()` and then wait for your writable stream to `finish` before
+ * destination, e.g. `fs.createWriteStream('my-map.smp')`. You must call
+ * `writer.finish()` and then wait for your writable stream to `finish` before
  * using the output.
  */
 export class Writer {
@@ -90,8 +90,6 @@ export class Writer {
   #tileHashes = new Map()
   /** @type {Array<{ name: string, originalName: string }>} */
   #duplicateEntries = []
-
-  static SUPPORTED_SOURCE_TYPES = SUPPORTED_SOURCE_TYPES
 
   /**
    * @param {any} style A v7 or v8 MapLibre style. v7 styles will be migrated to
@@ -376,7 +374,7 @@ export class Writer {
    * @param {GlyphInfo} glyphInfo
    * @returns {Promise<void>}
    */
-  addGlyphs(glyphData, { font: fontName, range }) {
+  async addGlyphs(glyphData, { font: fontName, range }) {
     this.#fonts.add(fontName)
     const name = getGlyphFilename({ fontstack: fontName, range })
     return this.#append(glyphData, { name })

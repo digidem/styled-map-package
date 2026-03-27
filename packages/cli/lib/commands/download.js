@@ -178,7 +178,7 @@ export async function runDownload(
     maxzoom: zoom,
     styleUrl,
     onprogress: (/** @type {any} */ p) => reporter.write(p),
-    accessToken: token,
+    mapboxAccessToken: token,
     skipLocalGlyphs,
     dedupe,
   })
