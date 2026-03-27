@@ -1,5 +1,11 @@
 # styled-map-package-api
 
+## 5.0.0-pre.5
+
+### Major Changes
+
+- [#105](https://github.com/digidem/styled-map-package/pull/105) [`45e1767`](https://github.com/digidem/styled-map-package/commit/45e17678d68c9fc25010d66d93f409d077aa0c3e) Thanks [@gmaclennan](https://github.com/gmaclennan)! - API cleanup for consistency: accessToken -> mapboxAccessToken and download now cleans up resources on cancel.
+
 ## 5.0.0-pre.4
 
 ### Minor Changes
