@@ -644,6 +644,86 @@ test('Raster tiles write and read', async () => {
   expect(jpgTileHashOut, 'JPG tile is the same').toBe(jpgTileHash)
 })
 
+test('Source attribution is preserved through write & read', async () => {
+  const vectorAttribution = '© <a href="https://example.com">Example Vector</a>'
+  const rasterAttribution = 'Imagery © Example Raster'
+  const geojsonAttribution = 'Data © Example GeoJSON'
+
+  /** @type {import('@maplibre/maplibre-gl-style-spec').StyleSpecification} */
+  const styleIn = {
+    version: 8,
+    name: 'Attribution test',
+    sources: {
+      vector: {
+        type: 'vector',
+        tiles: ['https://example.com/v/{z}/{x}/{y}.mvt'],
+        attribution: vectorAttribution,
+      },
+      raster: {
+        type: 'raster',
+        tiles: ['https://example.com/r/{z}/{x}/{y}.png'],
+        tileSize: 256,
+        attribution: rasterAttribution,
+      },
+      geojson: {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              properties: {},
+              geometry: { type: 'Point', coordinates: [0, 0] },
+            },
+          ],
+        },
+        attribution: geojsonAttribution,
+      },
+    },
+    layers: [
+      { id: 'bg', type: 'background', paint: { 'background-color': '#fff' } },
+      { id: 'vector', type: 'line', source: 'vector', 'source-layer': 'l' },
+      { id: 'raster', type: 'raster', source: 'raster' },
+      { id: 'geojson', type: 'circle', source: 'geojson' },
+    ],
+  }
+
+  const writer = new Writer(styleIn)
+  const smpPromise = streamToBuffer(writer.outputStream)
+  await writer.addTile(randomWebStream({ size: 1024 }), {
+    x: 0,
+    y: 0,
+    z: 0,
+    sourceId: 'vector',
+    format: 'mvt',
+  })
+  await writer.addTile(randomWebStream({ size: 1024 }), {
+    x: 0,
+    y: 0,
+    z: 0,
+    sourceId: 'raster',
+    format: 'png',
+  })
+  writer.finish()
+
+  const smp = await smpPromise
+  const reader = new Reader(await ZipReader.from(new BufferSource(smp)))
+  const styleOut = await reader.getStyle()
+
+  expect(
+    /** @type {any} */ (styleOut.sources.vector).attribution,
+    'vector source attribution preserved',
+  ).toBe(vectorAttribution)
+  expect(
+    /** @type {any} */ (styleOut.sources.raster).attribution,
+    'raster source attribution preserved',
+  ).toBe(rasterAttribution)
+  expect(
+    /** @type {any} */ (styleOut.sources.geojson).attribution,
+    'geojson source attribution preserved',
+  ).toBe(geojsonAttribution)
+})
+
 test('Optimized central directory order', async () => {
   const styleInUrl = new URL(
     './fixtures/valid-styles/all-types.input.json',
