@@ -80,6 +80,7 @@
     "map-obj": "^5.0.2",
     "mbtiles-reader": "^2.0.1",
     "p-limit": "^6.2.0",
+    "pmtiles": "^4.4.1",
     "readable-stream": "^4.7.0",
     "yocto-queue": "^1.1.1",
     "zip-writer": "^2.2.0"
