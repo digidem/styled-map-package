@@ -231,6 +231,8 @@ export class Writer {
       case 'raster':
       case 'vector':
         smpSource = {
+          // Only tile-addressing keys are dropped; `attribution` and other
+          // source properties are intentionally retained (spec §5.7).
           ...excludeKeys(source, ['tiles', 'url', 'scheme']),
           scheme: 'xyz',
           ...tileSourceOverrides,

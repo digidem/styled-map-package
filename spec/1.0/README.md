@@ -240,7 +240,7 @@ Vector tiles (`.mvt`, `.pbf`) SHOULD be stored gzip-compressed (using the `.mvt.
 
 Files with a `.mvt` or `.pbf` extension (without `.gz`) MUST NOT contain gzip-compressed data. Only the `.mvt.gz` and `.pbf.gz` extensions indicate gzip compression.
 
-Tiles with no meaningful content (e.g. ocean tiles) are still valid and MUST be present if they fall within the source's bounds and zoom range (see [Section 5.7](#57-tile-bounds-and-completeness)). An "empty" vector tile still contains valid protobuf headers, and an "empty" raster tile is a valid image file (e.g. a single-color PNG). The central directory deduplication technique described in [Section 3.6](#36-central-directory) can be used to store identical tiles efficiently without duplicating their data.
+Tiles with no meaningful content (e.g. ocean tiles) are still valid and MUST be present if they fall within the source's bounds and zoom range (see [Section 5.8](#58-tile-bounds-and-completeness)). An "empty" vector tile still contains valid protobuf headers, and an "empty" raster tile is a valid image file (e.g. a single-color PNG). The central directory deduplication technique described in [Section 3.6](#36-central-directory) can be used to store identical tiles efficiently without duplicating their data.
 
 ### 5.3 Tile Format Consistency
 
@@ -279,7 +279,15 @@ Each tile source in `style.json` MUST include:
 
 Tile sources MUST NOT include a `url` property. If the original style references a [TileJSON](https://github.com/mapbox/tilejson-spec) endpoint via `url`, the relevant TileJSON properties (`bounds`, `minzoom`, `maxzoom`, `tiles`) MUST be inlined directly in the source object and the `url` property MUST be removed.
 
-### 5.7 Tile Bounds and Completeness
+### 5.7 Source Attribution
+
+A tile source MAY include an `attribution` property, as defined by the [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/sources/). Its value is a plain-text or HTML string crediting the data provider. It does not reference any resource inside the archive, so the SMP URI requirements of [Section 4.2](#42-smp-uri-scheme) do not apply to it.
+
+Writers SHOULD preserve a source's `attribution` property in the output `style.json`. When a source is derived from a [TileJSON](https://github.com/mapbox/tilejson-spec) endpoint, writers SHOULD inline the TileJSON `attribution` value into the source object (see [Section 5.6](#56-source-properties)).
+
+Readers and serving implementations MUST return the `attribution` property unmodified when it is present in `style.json`, so that mapping libraries can display correct data credits for offline maps.
+
+### 5.8 Tile Bounds and Completeness
 
 The `bounds` property of a tile source MUST reflect the geographic extent of available tile data, as defined by the [TileJSON specification](https://github.com/mapbox/tilejson-spec). It represents the bounding box within which tile data is present and MAY be used by clients to limit requests to this region.
 
