@@ -163,6 +163,8 @@ const stream = download({
 
 The `skipLocalGlyphs` option skips downloading glyph ranges that MapLibre GL renders client-side via [`localIdeographFontFamily`](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/) (CJK, Hangul, Kana, Yi, and Halfwidth/Fullwidth Forms — 163 of 256 ranges). This significantly reduces download size for styles that use these scripts.
 
+Tile sources may reference either a [TileJSON](https://github.com/mapbox/tilejson-spec) endpoint or a [PMTiles](https://docs.protomaps.com/pmtiles/) archive (`url: "pmtiles://https://…/map.pmtiles"`). PMTiles archives are read over HTTP range requests, and only the tiles within `bbox`/`maxzoom` are downloaded.
+
 The `onprogress` callback receives a `DownloadProgress` object:
 
 ```js

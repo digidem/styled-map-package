@@ -4,6 +4,11 @@ import { includeKeys } from 'filter-obj'
 import ky from 'ky'
 import Queue from 'yocto-queue'
 
+import {
+  downloadPmtilesTiles,
+  isPmtilesUrl,
+  openPmtiles,
+} from './pmtiles-downloader.js'
 import { downloadTiles } from './tile-downloader.js'
 import { FetchQueue } from './utils/fetch.js'
 import {
@@ -24,6 +29,7 @@ import {
 /** @import { SourceSpecification, StyleSpecification } from '@maplibre/maplibre-gl-style-spec' */
 /** @import { TileInfo, GlyphInfo, GlyphRange } from './writer.js' */
 /** @import { TileDownloadStats } from './tile-downloader.js' */
+/** @import { PmtilesHandle } from './pmtiles-downloader.js' */
 /** @import { StyleInlinedSources, InlinedSource } from './types.js'*/
 
 /** @typedef { import('ky').ResponsePromise & { body: ReadableStream<Uint8Array> } } ResponsePromise */
@@ -48,6 +54,10 @@ export class StyleDownloader {
   /** @type {FetchQueue} */
   #fetchQueue
   #mapboxAccessToken
+  /** @type {number} */
+  #concurrency
+  /** @type {Map<string, PmtilesHandle>} Inlined PMTiles sources, keyed by source id */
+  #pmtilesSources = new Map()
 
   /**
    * @param {string | StyleSpecification} style A url to a style JSON file or a style object
@@ -69,6 +79,7 @@ export class StyleDownloader {
       }
       this.#inputStyle = styleV8
     }
+    this.#concurrency = concurrency
     this.#fetchQueue = new FetchQueue(concurrency)
   }
 
@@ -97,8 +108,11 @@ export class StyleDownloader {
     }
     /** @type {{ [_:string]: InlinedSource }} */
     const inlinedSources = {}
+    // `#pmtilesSources` is keyed by stable source ids and only ever overwritten
+    // (the input style is immutable), so it is not cleared between calls — that
+    // would briefly empty the map mid-flight for a concurrent `getTiles()`.
     for (const [sourceId, source] of Object.entries(this.#inputStyle.sources)) {
-      inlinedSources[sourceId] = await this.#getInlinedSource(source)
+      inlinedSources[sourceId] = await this.#getInlinedSource(sourceId, source)
     }
     return {
       ...this.#inputStyle,
@@ -107,10 +121,11 @@ export class StyleDownloader {
   }
 
   /**
+   * @param {string} sourceId
    * @param {SourceSpecification} source
    * @returns {Promise<InlinedSource>}
    */
-  async #getInlinedSource(source) {
+  async #getInlinedSource(sourceId, source) {
     if (isInlinedSource(source)) {
       return source
     }
@@ -121,6 +136,20 @@ export class StyleDownloader {
     ) {
       if (!source.url) {
         throw new Error('Source is missing both url and tiles properties')
+      }
+      if (isPmtilesUrl(source.url)) {
+        if (source.type === 'raster-dem') {
+          throw new Error('raster-dem PMTiles sources are not supported')
+        }
+        const handle = await openPmtiles(source.url)
+        this.#pmtilesSources.set(sourceId, handle)
+        // `tiles` is overwritten by the Writer with an `smp://` template; it is
+        // set here only so the source validates as an inlined (non-url) source.
+        return /** @type {InlinedSource} */ ({
+          ...source,
+          ...handle.source,
+          tiles: [],
+        })
       }
       const sourceUrl = normalizeSourceURL(source.url, this.#mapboxAccessToken)
       const tilejson = await ky(sourceUrl).json()
@@ -311,21 +340,37 @@ export class StyleDownloader {
         // after we are already reading the next source, hence the need for a
         // closure.
         const statsBaseline = { ...stats }
-        const sourceTiles = downloadTiles({
-          tileUrls: source.tiles,
-          bounds,
-          maxzoom: Math.min(maxzoom, source.maxzoom || maxzoom),
-          minzoom: source.minzoom,
-          sourceBounds: source.bounds,
-          boundsBuffer: true,
-          scheme: source.scheme,
-          fetchQueue: _this.#fetchQueue,
-          onprogress: (sourceStats) => {
-            stats = addStats(statsBaseline, sourceStats)
-            onprogress(stats)
-          },
-          trackErrors,
-        })
+        /** @param {TileDownloadStats} sourceStats */
+        const onSourceProgress = (sourceStats) => {
+          stats = addStats(statsBaseline, sourceStats)
+          onprogress(stats)
+        }
+        const pmtilesHandle = _this.#pmtilesSources.get(sourceId)
+        const sourceTiles = pmtilesHandle
+          ? downloadPmtilesTiles({
+              pmtiles: pmtilesHandle.pmtiles,
+              format: pmtilesHandle.format,
+              bounds,
+              maxzoom: Math.min(maxzoom, source.maxzoom || maxzoom),
+              minzoom: source.minzoom,
+              sourceBounds: source.bounds,
+              boundsBuffer: true,
+              concurrency: _this.#concurrency,
+              onprogress: onSourceProgress,
+              trackErrors,
+            })
+          : downloadTiles({
+              tileUrls: source.tiles,
+              bounds,
+              maxzoom: Math.min(maxzoom, source.maxzoom || maxzoom),
+              minzoom: source.minzoom,
+              sourceBounds: source.bounds,
+              boundsBuffer: true,
+              scheme: source.scheme,
+              fetchQueue: _this.#fetchQueue,
+              onprogress: onSourceProgress,
+              trackErrors,
+            })
         for await (const [tileDataStream, tileInfo] of sourceTiles) {
           yield [tileDataStream, { ...tileInfo, sourceId }]
         }
