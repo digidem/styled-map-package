@@ -1,5 +1,11 @@
 # smp-noto-glyphs
 
+## 1.0.0-pre.1
+
+### Patch Changes
+
+- [#103](https://github.com/digidem/styled-map-package/pull/103) [`0513081`](https://github.com/digidem/styled-map-package/commit/0513081582e8e1ba3887a565a3f1615dcb664692) Thanks [@gmaclennan](https://github.com/gmaclennan)! - Gzip noto glyph fallbacks at rest
+
 ## 1.0.0-pre.0
 
 ### Major Changes
