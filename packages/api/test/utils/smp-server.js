@@ -14,7 +14,8 @@ import { createServer } from '../../lib/server.js'
  */
 export async function startSMPServer(fixturePath) {
   const reader = new Reader(fixturePath)
-  const smpServer = createServer()
+  // Emulate a real origin server: missing tiles/glyphs return 404, not fallbacks.
+  const smpServer = createServer({ fallbackTile: null, fallbackGlyph: null })
   const httpServer = createHTTPServer(
     createServerAdapter((request) =>
       smpServer.fetch(request, reader).catch(error),

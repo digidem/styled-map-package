@@ -26,6 +26,7 @@ import { Writer } from './writer.js'
  * @param {string} [opts.mapboxAccessToken]
  * @param {boolean} [opts.skipLocalGlyphs] Skip glyph ranges rendered client-side by MapLibre GL via localIdeographFontFamily (CJK, Hangul, Kana, Yi, etc.)
  * @param {boolean} [opts.dedupe] When true, duplicate tiles are stored only once (see {@link Writer})
+ * @param {number} [opts.bufferTiles=0] Number of extra tile rings to download around `bbox` at each zoom level below maxzoom, so the map is not clipped at the edges of the downloaded area when zooming out. Recorded in the package as `metadata['smp:bufferTiles']`.
  * @param {AbortSignal} [opts.signal] AbortSignal to cancel the download
  * @returns {import('./types.js').DownloadStream} Readable stream of the output styled map file
  */
@@ -37,6 +38,7 @@ export function download({
   mapboxAccessToken,
   skipLocalGlyphs,
   dedupe,
+  bufferTiles = 0,
   signal: signalExt,
 }) {
   /** @type {ReadableStreamDefaultReader<Uint8Array> | undefined} */
@@ -101,6 +103,7 @@ export function download({
           const tiles = downloader.getTiles({
             bounds: bbox,
             maxzoom,
+            bufferTiles,
             onprogress: (tileStats) =>
               handleProgress({ tiles: { ...tileStats, done: false } }),
           })

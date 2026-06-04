@@ -20,8 +20,8 @@ program
   .option('-o, --open', 'open in the default web browser')
   .option('-p, --port <number>', 'port to serve on', (v) => parseInt(v), 3000)
   .option(
-    '-f, --fallback',
-    'serve empty tiles and glyphs for missing resources instead of 404',
+    '--no-fallback',
+    'return 404 for missing tiles and glyphs instead of serving empty fallbacks',
   )
   .argument('<file>', 'file to serve')
   .action(async (filepath, { open, port, fallback }) => {

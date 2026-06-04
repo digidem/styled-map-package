@@ -308,6 +308,45 @@ describe('runDownload', () => {
     )
   })
 
+  test('bufferTiles flag maps to a one-tile ring', async () => {
+    const deps = makeDeps()
+
+    await runDownload(
+      {
+        styleUrl: 'https://example.com/style.json',
+        bbox: [11, 47, 12, 47.5],
+        zoom: 5,
+        output: 'out.smp',
+        token: undefined,
+        bufferTiles: true,
+      },
+      deps,
+    )
+
+    expect(deps.download).toHaveBeenCalledWith(
+      expect.objectContaining({ bufferTiles: 1 }),
+    )
+  })
+
+  test('no bufferTiles flag means no buffer', async () => {
+    const deps = makeDeps()
+
+    await runDownload(
+      {
+        styleUrl: 'https://example.com/style.json',
+        bbox: [11, 47, 12, 47.5],
+        zoom: 5,
+        output: 'out.smp',
+        token: undefined,
+      },
+      deps,
+    )
+
+    expect(deps.download).toHaveBeenCalledWith(
+      expect.objectContaining({ bufferTiles: 0 }),
+    )
+  })
+
   test('prompts for output when TTY and missing required args', async () => {
     const deps = makeDeps({ isTTY: true })
     deps.prompt.input

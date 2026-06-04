@@ -43,30 +43,99 @@ describe('tileIterator', () => {
     assert(constrained.some((t) => t.z === 0))
   })
 
-  test('boundsBuffer adds extra tiles at edges', () => {
-    // boundsBuffer only has effect when sourceBounds is larger than bounds
+  test('bufferTiles adds extra tile rings at edges', () => {
+    // bufferTiles only has effect when sourceBounds is larger than bounds
     const bounds = /** @type {const} */ ([10, 10, 20, 20])
     const sourceBounds = /** @type {const} */ ([-180, -85, 180, 85])
     const withoutBuffer = [
-      ...tileIterator({
-        bounds,
-        maxzoom: 3,
-        boundsBuffer: false,
-        sourceBounds,
-      }),
+      ...tileIterator({ bounds, maxzoom: 3, bufferTiles: 0, sourceBounds }),
     ]
-    const withBuffer = [
-      ...tileIterator({
-        bounds,
-        maxzoom: 3,
-        boundsBuffer: true,
-        sourceBounds,
-      }),
+    const oneRing = [
+      ...tileIterator({ bounds, maxzoom: 3, bufferTiles: 1, sourceBounds }),
+    ]
+    const twoRings = [
+      ...tileIterator({ bounds, maxzoom: 3, bufferTiles: 2, sourceBounds }),
     ]
     assert(
-      withBuffer.length > withoutBuffer.length,
-      `buffer (${withBuffer.length}) > no buffer (${withoutBuffer.length})`,
+      oneRing.length > withoutBuffer.length,
+      `1 ring (${oneRing.length}) > no buffer (${withoutBuffer.length})`,
     )
+    assert(
+      twoRings.length > oneRing.length,
+      `2 rings (${twoRings.length}) > 1 ring (${oneRing.length})`,
+    )
+  })
+
+  test('bufferTiles defaults to 0 (no buffer)', () => {
+    const bounds = /** @type {const} */ ([10, 10, 20, 20])
+    const sourceBounds = /** @type {const} */ ([-180, -85, 180, 85])
+    const defaulted = [...tileIterator({ bounds, maxzoom: 3, sourceBounds })]
+    const explicitZero = [
+      ...tileIterator({ bounds, maxzoom: 3, bufferTiles: 0, sourceBounds }),
+    ]
+    assert.deepEqual(defaulted, explicitZero)
+  })
+
+  test('bufferTiles of N expands the tile range by N at each edge below maxzoom', () => {
+    // Small bounds, large source so the buffer is not clamped. Zoom 8 is below
+    // maxzoom (9), so the buffer applies there.
+    const bounds = /** @type {const} */ ([10, 10, 11, 11])
+    const sourceBounds = /** @type {const} */ ([-180, -85, 180, 85])
+    const atZoom = (/** @type {{x:number,y:number,z:number}[]} */ tiles) =>
+      tiles.filter((t) => t.z === 8)
+    const baseTiles = atZoom([
+      ...tileIterator({
+        bounds,
+        minzoom: 8,
+        maxzoom: 9,
+        bufferTiles: 0,
+        sourceBounds,
+      }),
+    ])
+    const baseXs = baseTiles.map((t) => t.x)
+    const baseYs = baseTiles.map((t) => t.y)
+    const buffered = atZoom([
+      ...tileIterator({
+        bounds,
+        minzoom: 8,
+        maxzoom: 9,
+        bufferTiles: 2,
+        sourceBounds,
+      }),
+    ])
+    const bufferedXs = buffered.map((t) => t.x)
+    const bufferedYs = buffered.map((t) => t.y)
+    assert.equal(Math.min(...bufferedXs), Math.min(...baseXs) - 2)
+    assert.equal(Math.max(...bufferedXs), Math.max(...baseXs) + 2)
+    assert.equal(Math.min(...bufferedYs), Math.min(...baseYs) - 2)
+    assert.equal(Math.max(...bufferedYs), Math.max(...baseYs) + 2)
+  })
+
+  test('bufferTiles is not applied at maxzoom', () => {
+    // The buffer improves coverage when zooming out, so maxzoom gets no buffer.
+    const bounds = /** @type {const} */ ([10, 10, 11, 11])
+    const sourceBounds = /** @type {const} */ ([-180, -85, 180, 85])
+    const atMaxzoom = (/** @type {{x:number,y:number,z:number}[]} */ tiles) =>
+      tiles.filter((t) => t.z === 8)
+    const base = atMaxzoom([
+      ...tileIterator({
+        bounds,
+        minzoom: 8,
+        maxzoom: 8,
+        bufferTiles: 0,
+        sourceBounds,
+      }),
+    ])
+    const buffered = atMaxzoom([
+      ...tileIterator({
+        bounds,
+        minzoom: 8,
+        maxzoom: 8,
+        bufferTiles: 2,
+        sourceBounds,
+      }),
+    ])
+    assert.deepEqual(buffered, base)
   })
 
   test('small bounds yields few tiles per zoom', () => {

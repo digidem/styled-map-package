@@ -674,10 +674,10 @@ describe('Spec §9: Resource integrity', () => {
 // Section 9.1: Missing resources — server fallback behavior
 // ============================================================================
 describe('Spec §9.1: Missing resources — server behavior', () => {
-  test('Server returns 404 for missing tile', async () => {
+  test('Server returns 404 for missing tile when fallback is disabled', async () => {
     const smpBuf = await createValidSmp()
     const reader = await readerFromBuffer(smpBuf)
-    const server = createServer()
+    const server = createServer({ fallbackTile: null })
     await assert.rejects(
       server.fetch(
         new Request('http://example.com/s/0/99/99/99.mvt.gz'),

@@ -163,7 +163,7 @@ function singleChunkStream(data) {
  * @param {(progress: TileDownloadStats) => void} [opts.onprogress] Callback to report download progress
  * @param {boolean} [opts.trackErrors=false] Include errors in the returned array of skipped tiles - this has memory overhead so should only be used for debugging.
  * @param {Readonly<BBox>} [opts.sourceBounds=MAX_BOUNDS] Bounding box of source data.
- * @param {boolean} [opts.boundsBuffer=false] Buffer the bounds by one tile at each zoom level to ensure no tiles are missed at the edges.
+ * @param {number} [opts.bufferTiles=0] Number of extra tile rings to download around the bounds at each zoom level below maxzoom, to ensure tiles are not missed at the edges.
  * @param {number} [opts.minzoom=0] Minimum zoom level to download
  * @param {number} [opts.concurrency=8] Number of concurrent tile reads
  * @returns {AsyncGenerator<[ReadableStream<Uint8Array>, TileInfo]> & { readonly skipped: Array<TileInfo & { error?: Error }>, readonly stats: TileDownloadStats }}
@@ -176,7 +176,7 @@ export function downloadPmtilesTiles({
   onprogress = noop,
   trackErrors = false,
   sourceBounds = MAX_BOUNDS,
-  boundsBuffer = false,
+  bufferTiles = 0,
   minzoom = 0,
   concurrency = 8,
 }) {
@@ -188,7 +188,7 @@ export function downloadPmtilesTiles({
   /** @type {ReturnType<downloadPmtilesTiles>} */
   const tiles = (async function* () {
     const coords = [
-      ...tileIterator({ bounds, minzoom, maxzoom, sourceBounds, boundsBuffer }),
+      ...tileIterator({ bounds, minzoom, maxzoom, sourceBounds, bufferTiles }),
     ]
     stats.total = coords.length
     onprogress(stats)

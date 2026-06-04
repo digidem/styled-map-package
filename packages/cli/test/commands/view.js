@@ -3,6 +3,9 @@ import { describe, expect, test, vi } from 'vitest'
 import { runView } from '../../lib/commands/view.js'
 
 describe('runView', () => {
+  const emptyTileFallback = vi.fn()
+  const emptyGlyphFallback = vi.fn()
+
   function makeDeps(overrides = {}) {
     return {
       Reader: vi.fn().mockImplementation(() => ({ getStyle: vi.fn() })),
@@ -14,9 +17,9 @@ describe('runView', () => {
       readViewerHtml: vi
         .fn()
         .mockResolvedValue(new Uint8Array([60, 104, 116, 109, 108, 62])), // <html>
-      listen: vi
-        .fn()
-        .mockResolvedValue('http://127.0.0.1:3000'),
+      listen: vi.fn().mockResolvedValue('http://127.0.0.1:3000'),
+      emptyTileFallback,
+      emptyGlyphFallback,
       ...overrides,
     }
   }
@@ -29,12 +32,37 @@ describe('runView', () => {
     expect(deps.Reader).toHaveBeenCalledWith('test.smp')
   })
 
-  test('creates server with /map base', async () => {
+  test('creates server with /map base, expandBounds, and fallbacks by default', async () => {
     const deps = makeDeps()
 
     await runView({ port: 3000, filepath: 'test.smp' }, deps)
 
-    expect(deps.createServer).toHaveBeenCalledWith({ base: '/map' })
+    expect(deps.createServer).toHaveBeenCalledWith({
+      base: '/map',
+      expandBounds: true,
+      fallbackTile: deps.emptyTileFallback,
+      fallbackGlyph: deps.emptyGlyphFallback,
+    })
+  })
+
+  test('always enables expandBounds', async () => {
+    const deps = makeDeps()
+
+    await runView({ port: 3000, filepath: 'test.smp', fallback: false }, deps)
+
+    expect(deps.createServer).toHaveBeenCalledWith(
+      expect.objectContaining({ expandBounds: true }),
+    )
+  })
+
+  test('fallback: false disables the fallback handlers', async () => {
+    const deps = makeDeps()
+
+    await runView({ port: 3000, filepath: 'test.smp', fallback: false }, deps)
+
+    expect(deps.createServer).toHaveBeenCalledWith(
+      expect.objectContaining({ fallbackTile: null, fallbackGlyph: null }),
+    )
   })
 
   test('logs server address', async () => {
@@ -50,10 +78,7 @@ describe('runView', () => {
   test('returns the server address', async () => {
     const deps = makeDeps()
 
-    const address = await runView(
-      { port: 3000, filepath: 'test.smp' },
-      deps,
-    )
+    const address = await runView({ port: 3000, filepath: 'test.smp' }, deps)
 
     expect(address).toBe('http://127.0.0.1:3000')
   })
@@ -102,9 +127,7 @@ describe('runView', () => {
 
   test('handler delegates /map/* to smpServer', async () => {
     const deps = makeDeps()
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValue(new Response('tile'))
+    const mockFetch = vi.fn().mockResolvedValue(new Response('tile'))
     deps.createServer.mockReturnValue({ fetch: mockFetch })
 
     deps.listen.mockImplementation(async (_port, handler) => {

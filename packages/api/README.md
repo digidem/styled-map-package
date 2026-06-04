@@ -89,33 +89,31 @@ httpServer.listen(3000)
 
 ### Fallback tiles and glyphs
 
-When an SMP file doesn't contain every tile or glyph range that the style references, `createServer` can call fallback handlers instead of returning a 404. This is useful for previewing incomplete packages or packages that only cover a partial area/zoom range.
+When an SMP file doesn't contain every tile or glyph range that the style references, `createServer` calls fallback handlers instead of returning a 404. This is useful for previewing incomplete packages or packages that only cover a partial area/zoom range.
 
-Built-in fallback handlers are provided:
+By default `fallbackTile` is `emptyTileFallback` and `fallbackGlyph` is `emptyGlyphFallback` (both built in), so a plain `createServer()` serves empty tiles and glyphs for anything missing. Pass `null` to either option to return a 404 instead:
 
 ```js
-import {
-  emptyTileFallback,
-  emptyGlyphFallback,
-} from 'styled-map-package-api/fallbacks'
 import { createServer } from 'styled-map-package-api/server'
 
 const server = createServer({
-  fallbackTile: emptyTileFallback,
-  fallbackGlyph: emptyGlyphFallback,
+  fallbackTile: null,
+  fallbackGlyph: null,
 })
 ```
 
 - **`emptyTileFallback(tileId, sourceInfo)`** — Returns an appropriate empty tile based on the source's tile format: empty gzipped MVT for vector sources, 1×1 transparent PNG/WebP for raster sources.
 - **`emptyGlyphFallback(fontstack, range)`** — Returns an empty gzipped PBF (valid protobuf with no glyph entries), causing MapLibre to render missing characters as blank space instead of erroring on a 404.
 
+Both are exported from `styled-map-package-api/fallbacks` if you want to wrap them.
+
 For real glyph rendering with Noto Sans (80+ scripts), use the [`smp-noto-glyphs`](../glyphs/) package:
 
 ```js
 import { notoGlyphFallback } from 'smp-noto-glyphs'
 
+// fallbackTile keeps its default (empty tiles); only the glyph handler is overridden
 const server = createServer({
-  fallbackTile: emptyTileFallback,
   fallbackGlyph: notoGlyphFallback,
 })
 ```
@@ -132,6 +130,17 @@ const server = createServer({
     return fetch(`https://fonts.example.com/${fontstack}/${range}.pbf`)
   },
 })
+```
+
+### Rendering buffer tiles (`expandBounds`)
+
+When `download()` is given a [`bufferTiles`](#downloading-a-map-for-offline-use) value, it downloads extra tile rings around the requested area at every zoom level below maxzoom and records the count as `smp:bufferTiles` in the style metadata. `smp:bounds` is derived from the tile extent at the maximum zoom level (which carries no buffer), so at lower zoom levels these buffer tiles extend geographically beyond the source `bounds` and MapLibre will not request them by default.
+
+By default (`expandBounds: true`) the server widens each tile source's `bounds` to the whole world in the served `style.json`, so the lower-zoom buffer tiles are requested and rendered. The transform only applies when the package has `smp:bufferTiles` metadata, and the stored `style.json` is left unchanged. By default the server also pairs this with the built-in empty-tile fallback, so requests for tiles outside the downloaded area resolve to empty tiles rather than 404s. Pass `expandBounds: false` to disable the widening:
+
+```js
+// expandBounds and the empty-tile/glyph fallbacks are on by default
+const server = createServer()
 ```
 
 ### Downloading a map for offline use
@@ -151,17 +160,20 @@ const stream = download({
 
 **Options:**
 
-| Option              | Type        | Description                                                            |
-| ------------------- | ----------- | ---------------------------------------------------------------------- |
-| `styleUrl`          | `string`    | URL of the map style to download (required)                            |
-| `bbox`              | `BBox`      | Bounding box `[west, south, east, north]` for tile download (required) |
-| `maxzoom`           | `number`    | Maximum zoom level to download (required)                              |
-| `mapboxAccessToken` | `string?`   | Mapbox access token (required for Mapbox styles)                       |
-| `skipLocalGlyphs`   | `boolean?`  | Skip CJK/Hangul/Kana glyph ranges rendered client-side by MapLibre GL  |
-| `dedupe`            | `boolean?`  | Store duplicate tiles only once to reduce file size                    |
-| `onprogress`        | `function?` | Callback receiving a `DownloadProgress` object (see below)             |
+| Option              | Type        | Description                                                                         |
+| ------------------- | ----------- | ----------------------------------------------------------------------------------- |
+| `styleUrl`          | `string`    | URL of the map style to download (required)                                         |
+| `bbox`              | `BBox`      | Bounding box `[west, south, east, north]` for tile download (required)              |
+| `maxzoom`           | `number`    | Maximum zoom level to download (required)                                           |
+| `mapboxAccessToken` | `string?`   | Mapbox access token (required for Mapbox styles)                                    |
+| `skipLocalGlyphs`   | `boolean?`  | Skip CJK/Hangul/Kana glyph ranges rendered client-side by MapLibre GL               |
+| `dedupe`            | `boolean?`  | Store duplicate tiles only once to reduce file size                                 |
+| `bufferTiles`       | `number?`   | Extra tile rings to download around `bbox` at each zoom below maxzoom (default `0`) |
+| `onprogress`        | `function?` | Callback receiving a `DownloadProgress` object (see below)                          |
 
 The `skipLocalGlyphs` option skips downloading glyph ranges that MapLibre GL renders client-side via [`localIdeographFontFamily`](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/) (CJK, Hangul, Kana, Yi, and Halfwidth/Fullwidth Forms — 163 of 256 ranges). This significantly reduces download size for styles that use these scripts.
+
+The `bufferTiles` option downloads extra tile rings around `bbox` at every zoom level below maxzoom so the map is not clipped at the edges of the downloaded area when zooming out (a single source `bounds` rectangle cannot describe a per-zoom buffer). The buffer is not added at maxzoom. When non-zero it is recorded in the package as `metadata['smp:bufferTiles']`, which `createServer`'s [`expandBounds`](#rendering-buffer-tiles-expandbounds) option can use to render those tiles.
 
 Tile sources may reference either a [TileJSON](https://github.com/mapbox/tilejson-spec) endpoint or a [PMTiles](https://docs.protomaps.com/pmtiles/) archive (`url: "pmtiles://https://…/map.pmtiles"`). PMTiles archives are read over HTTP range requests, and only the tiles within `bbox`/`maxzoom` are downloaded.
 

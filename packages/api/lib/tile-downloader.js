@@ -29,7 +29,7 @@ import { noop } from './utils/misc.js'
  * @param {(progress: TileDownloadStats) => void} [opts.onprogress] Callback to report download progress
  * @param {boolean} [opts.trackErrors=false] Include errors in the returned array of skipped tiles - this has memory overhead so should only be used for debugging.
  * @param {Readonly<import('./utils/geo.js').BBox>} [opts.sourceBounds=MAX_BOUNDS] Bounding box of source data.
- * @param {boolean} [opts.boundsBuffer=false] Buffer the bounds by one tile at each zoom level to ensure no tiles are missed at the edges. With this set to false, in most instances the map will appear incomplete when viewed because the downloaded tiles at lower zoom levels will not cover the map view area.
+ * @param {number} [opts.bufferTiles=0] Number of extra tile rings to download around the bounds at each zoom level below `maxzoom`. A non-zero value ensures tiles are not missed at the edges of the view when the map is panned or zoomed out. The buffer is not applied at `maxzoom`, where it adds storage without improving viewport coverage.
  * @param {number} [opts.minzoom=0] Minimum zoom level to download (for most cases this should be left as `0` - the size overhead is minimal, because each zoom level has 4x as many tiles)
  * @param {number} [opts.concurrency=8] Number of concurrent downloads (ignored if `fetchQueue` is provided)
  * @param {FetchQueue} [opts.fetchQueue=new FetchQueue(concurrency)] Optional fetch queue to use for downloading tiles
@@ -43,7 +43,7 @@ export function downloadTiles({
   onprogress = noop,
   trackErrors = false,
   sourceBounds = MAX_BOUNDS,
-  boundsBuffer = false,
+  bufferTiles = 0,
   minzoom = 0,
   concurrency = 8,
   fetchQueue = new FetchQueue(concurrency),
@@ -92,7 +92,7 @@ export function downloadTiles({
       minzoom,
       maxzoom,
       sourceBounds,
-      boundsBuffer,
+      bufferTiles,
     })
     for (const { x, y, z } of tiles) {
       const tileURL = getTileUrl(tileUrls, { x, y, z, scheme })
@@ -157,7 +157,7 @@ export function downloadTiles({
  * @param {object} opts
  * @param {Readonly<import('./utils/geo.js').BBox>} [opts.bounds]
  * @param {Readonly<import('./utils/geo.js').BBox>} [opts.sourceBounds]
- * @param {boolean} [opts.boundsBuffer]
+ * @param {number} [opts.bufferTiles] Number of extra tile rings to add around the bounds at each zoom level below `maxzoom`. Defaults to `0`.
  * @param {number} [opts.minzoom]
  * @param {number} opts.maxzoom
  */
@@ -166,16 +166,19 @@ export function* tileIterator({
   minzoom = 0,
   maxzoom,
   sourceBounds,
-  boundsBuffer = false,
+  bufferTiles = 0,
 }) {
   const sm = new SphericalMercator({ size: 256 })
+  const maxBuffer = Math.max(0, Math.floor(bufferTiles))
   for (let z = minzoom; z <= maxzoom; z++) {
+    // Buffer improves tile coverage in the viewport when zooming out, so it is
+    // only needed below maxzoom; buffering maxzoom adds disk overhead for no gain.
+    const buffer = z < maxzoom ? maxBuffer : 0
     // Cloning bounds passed to sm.xyz because no guarantee it won't mutate the array
     let { minX, minY, maxX, maxY } = sm.xyz([...bounds], z)
     let sourceXYBounds = sourceBounds
       ? sm.xyz([...sourceBounds], z)
       : { minX, minY, maxX, maxY }
-    const buffer = boundsBuffer ? 1 : 0
     minX = Math.max(0, minX - buffer, sourceXYBounds.minX)
     minY = Math.max(0, minY - buffer, sourceXYBounds.minY)
     maxX = Math.min(Math.pow(2, z) - 1, maxX + buffer, sourceXYBounds.maxX)

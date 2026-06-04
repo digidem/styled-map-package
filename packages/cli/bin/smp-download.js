@@ -41,14 +41,27 @@ program
     '-d, --dedupe',
     'deduplicate tiles with identical content to reduce file size',
   )
+  .option(
+    '--buffer-tiles',
+    'download an extra tile ring around the bbox at each zoom level below maxzoom, so the map is not clipped at the edges when zooming out',
+  )
   .argument('[styleUrl]', 'URL to style to download', parseUrl)
   .action(
     async (
       styleUrl,
-      { bbox, zoom, output, token, skipLocalGlyphs, dedupe },
+      { bbox, zoom, output, token, skipLocalGlyphs, dedupe, bufferTiles },
     ) => {
       await runDownload(
-        { styleUrl, bbox, zoom, output, token, skipLocalGlyphs, dedupe },
+        {
+          styleUrl,
+          bbox,
+          zoom,
+          output,
+          token,
+          skipLocalGlyphs,
+          dedupe,
+          bufferTiles,
+        },
         {
           download,
           prompt: { input, number },
