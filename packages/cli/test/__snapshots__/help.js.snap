@@ -35,6 +35,10 @@ Options:
                                       rendered locally by MapLibre GL
   -d, --dedupe                        deduplicate tiles with identical content
                                       to reduce file size
+  --buffer-tiles                      download an extra tile ring around the
+                                      bbox at each zoom level below maxzoom, so
+                                      the map is not clipped at the edges when
+                                      zooming out
   -h, --help                          display help for command
 "
 `;
@@ -64,8 +68,8 @@ Arguments:
 Options:
   -o, --open           open in the default web browser
   -p, --port <number>  port to serve on (default: 3000)
-  -f, --fallback       serve empty tiles and glyphs for missing resources
-                       instead of 404
+  --no-fallback        return 404 for missing tiles and glyphs instead of
+                       serving empty fallbacks
   -h, --help           display help for command
 "
 `;

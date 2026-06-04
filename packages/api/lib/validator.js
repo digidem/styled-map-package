@@ -372,6 +372,21 @@ function validateMetadata(style, error, warn) {
     )
   }
 
+  // §4.3.4: smp:bufferTiles
+  const bufferTiles = metadata['smp:bufferTiles']
+  if (
+    bufferTiles != null &&
+    (typeof bufferTiles !== 'number' ||
+      !Number.isInteger(bufferTiles) ||
+      bufferTiles < 0)
+  ) {
+    error(
+      'invalid_smp_buffer_tiles',
+      `smp:bufferTiles must be a non-negative integer, got ${bufferTiles}`,
+      'metadata.smp:bufferTiles',
+    )
+  }
+
   // §4.3.3: smp:sourceFolders
   const sourceFolders = metadata['smp:sourceFolders']
   if (sourceFolders && typeof sourceFolders !== 'object') {

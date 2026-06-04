@@ -311,10 +311,17 @@ export class StyleDownloader {
    * @param {Readonly<import('./utils/geo.js').BBox>} opts.bounds
    * @param {number} opts.maxzoom
    * @param {(progress: TileDownloadStats) => void} [opts.onprogress]
+   * @param {number} [opts.bufferTiles=0] Number of extra tile rings to download around the bounds at each zoom level below maxzoom, so the map is not clipped at the edges of the downloaded area when zooming out.
    * @param {boolean} [opts.trackErrors=false] Include errors in the returned array of skipped tiles - this has memory overhead so should only be used for debugging.
    * @returns {AsyncGenerator<[ReadableStream<Uint8Array>, TileInfo]> & { readonly skipped: Array<TileInfo & { error?: Error }>, readonly stats: TileDownloadStats }}
    */
-  getTiles({ bounds, maxzoom, onprogress = noop, trackErrors = false }) {
+  getTiles({
+    bounds,
+    maxzoom,
+    onprogress = noop,
+    bufferTiles = 0,
+    trackErrors = false,
+  }) {
     const _this = this
     /** @type {Array<TileInfo & { error?: Error }>} */
     const skipped = []
@@ -354,7 +361,7 @@ export class StyleDownloader {
               maxzoom: Math.min(maxzoom, source.maxzoom || maxzoom),
               minzoom: source.minzoom,
               sourceBounds: source.bounds,
-              boundsBuffer: true,
+              bufferTiles,
               concurrency: _this.#concurrency,
               onprogress: onSourceProgress,
               trackErrors,
@@ -365,7 +372,7 @@ export class StyleDownloader {
               maxzoom: Math.min(maxzoom, source.maxzoom || maxzoom),
               minzoom: source.minzoom,
               sourceBounds: source.bounds,
-              boundsBuffer: true,
+              bufferTiles,
               scheme: source.scheme,
               fetchQueue: _this.#fetchQueue,
               onprogress: onSourceProgress,

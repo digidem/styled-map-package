@@ -201,6 +201,16 @@ Example:
 
 This indicates that tiles for the `openmaptiles` source are stored under `s/0/` and tiles for `hillshade` are stored under `s/1/`. The `s/` prefix and the subfolder names (`0`, `1`) are both implementation-defined — other writers MAY use different paths.
 
+#### 4.3.4 `smp:bufferTiles` (OPTIONAL)
+
+- Type: Non-negative integer
+- Indicates that tile sources include up to this many extra rings of tiles around the data at zoom levels below each source's `maxzoom`. A value of `1` means up to a one-tile border was added around the data at the lower zoom levels; absent or `0` means no buffer was applied.
+- The value is the largest buffer observed across all sources and zoom levels, and is only a hint: an individual source or zoom level MAY carry a smaller buffer — for example where the buffer is clamped at the antimeridian or the poles.
+- Writers add a buffer so that, when a consumer zooms out from the region the package covers, the tiles just outside the visible edge are present and the map does not appear clipped at the boundary. The buffer is not applied at a source's `maxzoom`, where it would add storage without improving coverage of the viewport.
+- A tile source's `bounds` reflects its tile extent at its own `maxzoom`, which carries no buffer, so it describes the requested area exactly (`smp:bounds` is the union of those extents). At lower zoom levels each tile covers a far larger area, so the buffer there extends geographically beyond that rectangle; those lower-zoom buffer tiles therefore lie outside `bounds`.
+- These extra tiles are OPTIONAL and do not change the completeness requirement: completeness is defined relative to `smp:bounds` (see [Section 5.8](#58-tile-bounds-and-completeness)). Clients MUST NOT rely on buffer tiles being present.
+- Because a tile source's `bounds` is a single rectangle, it cannot describe a per-zoom buffer. A consumer that wants to render the lower-zoom buffer tiles MAY, at serve time, widen each tile source's `bounds` (e.g. to the whole world) so that mapping libraries request them. When doing so, the consumer SHOULD also serve empty tiles for requests that fall outside the available data, since widening `bounds` will cause requests for tiles that are not present.
+
 ### 4.4 Additional Style Properties
 
 The standard [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/) properties `center` and `zoom`, if set, SHOULD be consistent with the data in the package — i.e. `center` SHOULD be within `smp:bounds` and `zoom` SHOULD be within the zoom range of the tile data (between `minzoom` and `smp:maxzoom`).
@@ -289,9 +299,11 @@ Readers and serving implementations MUST return the `attribution` property unmod
 
 ### 5.8 Tile Bounds and Completeness
 
-The `bounds` property of a tile source MUST reflect the geographic extent of available tile data, as defined by the [TileJSON specification](https://github.com/mapbox/tilejson-spec). It represents the bounding box within which tile data is present and MAY be used by clients to limit requests to this region.
+The `bounds` property of a tile source MUST reflect the geographic extent of available tile data at the source's maximum zoom level, as defined by the [TileJSON specification](https://github.com/mapbox/tilejson-spec). It represents the bounding box within which tile data is present and MAY be used by clients to limit requests to this region.
 
 All tiles at zoom levels between `minzoom` and `maxzoom` (inclusive) that intersect the source's `bounds` MUST be present in the archive.
+
+A package MAY contain additional tiles that lie outside the source's `bounds` — for example lower-zoom buffer tiles (see [Section 4.3.4](#434-smpbuffertiles-optional)), which can extend beyond a `bounds` derived from the maximum-zoom extent. Such extra tiles are permitted and do not affect the completeness requirement above.
 
 ## 6. Fonts (Glyphs)
 

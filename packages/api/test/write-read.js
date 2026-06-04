@@ -6,7 +6,7 @@ import { describe, expect, test } from 'vitest'
 
 import { Reader } from '../lib/reader.js'
 import { tileIterator } from '../lib/tile-downloader.js'
-import { unionBBox } from '../lib/utils/geo.js'
+import { MAX_BOUNDS, unionBBox } from '../lib/utils/geo.js'
 import { Writer } from '../lib/writer.js'
 import { assertBboxEqual } from './utils/assert-bbox-equal.js'
 import { DigestStream } from './utils/digest-stream.js'
@@ -154,6 +154,90 @@ test('Minimal write & read', async () => {
       tileHashes.get(`${z}/${x}/${y}`),
     )
   }
+})
+
+describe('bufferTiles metadata (inferred)', () => {
+  // The buffer only has effect when sourceBounds is larger than bounds, so the
+  // tiles cover a small area within a much larger source extent.
+  const defaultBounds = /** @type {BBox} */ ([10, 10, 11, 11])
+  const defaultSourceBounds = /** @type {BBox} */ ([-180, -85, 180, 85])
+
+  /**
+   * @param {number} bufferTiles
+   * @param {{ bounds?: BBox, sourceBounds?: BBox }} [opts]
+   */
+  async function writeWithBuffer(
+    bufferTiles,
+    { bounds = defaultBounds, sourceBounds = defaultSourceBounds } = {},
+  ) {
+    const styleIn = await readJson(
+      new URL('./fixtures/valid-styles/minimal.input.json', import.meta.url),
+    )
+    const writer = new Writer(styleIn)
+    const smpPromise = streamToBuffer(writer.outputStream)
+    for (const { x, y, z } of tileIterator({
+      minzoom: 0,
+      maxzoom: 5,
+      bounds,
+      sourceBounds,
+      bufferTiles,
+    })) {
+      await writer.addTile(randomWebStream({ size: random(256, 1024) }), {
+        x,
+        y,
+        z,
+        sourceId: 'maplibre',
+        format: 'mvt',
+      })
+    }
+    writer.finish()
+    const smp = await smpPromise
+    const reader = new Reader(await ZipReader.from(new BufferSource(smp)))
+    return (await reader.getStyle()).metadata
+  }
+
+  test('infers smp:bufferTiles = 1 from a one-ring buffer', async () => {
+    const metadata = await writeWithBuffer(1)
+    expect(metadata['smp:bufferTiles']).toBe(1)
+  })
+
+  test('infers smp:bufferTiles = 2 from a two-ring buffer', async () => {
+    const metadata = await writeWithBuffer(2)
+    expect(metadata['smp:bufferTiles']).toBe(2)
+  })
+
+  test('omits smp:bufferTiles when there is no buffer', async () => {
+    const metadata = await writeWithBuffer(0)
+    expect('smp:bufferTiles' in metadata).toBe(false)
+  })
+
+  // When a bounds side sits on the Web Mercator extent the buffer is clamped to
+  // 0 on that axis, so the inference must rely on the unclamped axis.
+  const [west, south, east, north] = MAX_BOUNDS
+
+  test('infers smp:bufferTiles when bounds span the full longitude (east-west edges clamped)', async () => {
+    const metadata = await writeWithBuffer(1, {
+      bounds: [west, 10, east, 11],
+      sourceBounds: [...MAX_BOUNDS],
+    })
+    expect(metadata['smp:bufferTiles']).toBe(1)
+  })
+
+  test('infers smp:bufferTiles when bounds span the full latitude (north-south edges clamped)', async () => {
+    const metadata = await writeWithBuffer(1, {
+      bounds: [10, south, 11, north],
+      sourceBounds: [...MAX_BOUNDS],
+    })
+    expect(metadata['smp:bufferTiles']).toBe(1)
+  })
+
+  test('infers smp:bufferTiles for a small area in the NE corner (north + east edges clamped)', async () => {
+    const metadata = await writeWithBuffer(1, {
+      bounds: [170, 80, east, north],
+      sourceBounds: [...MAX_BOUNDS],
+    })
+    expect(metadata['smp:bufferTiles']).toBe(1)
+  })
 })
 
 test('Inline GeoJSON is not removed from style', async () => {

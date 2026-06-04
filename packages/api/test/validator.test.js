@@ -448,6 +448,91 @@ describe('validate — SMP metadata (§4.3)', () => {
     }
   })
 
+  test('smp:bufferTiles non-negative integer → valid', async () => {
+    for (const bufferTiles of [0, 1, 2]) {
+      const filepath = await createZipFile([
+        { name: 'VERSION', data: '1.0\n' },
+        {
+          name: 'style.json',
+          data: JSON.stringify({
+            version: 8,
+            sources: {},
+            layers: [],
+            metadata: {
+              'smp:bounds': [-180, -85, 180, 85],
+              'smp:maxzoom': 5,
+              'smp:bufferTiles': bufferTiles,
+            },
+          }),
+        },
+      ])
+      const result = await validate(filepath)
+      assert(
+        !hasError(result, 'invalid_smp_buffer_tiles'),
+        `bufferTiles ${bufferTiles} should be valid`,
+      )
+    }
+  })
+
+  test('smp:bufferTiles non-integer → error', async () => {
+    const filepath = await createZipFile([
+      { name: 'VERSION', data: '1.0\n' },
+      {
+        name: 'style.json',
+        data: JSON.stringify({
+          version: 8,
+          sources: {},
+          layers: [],
+          metadata: {
+            'smp:bounds': [-180, -85, 180, 85],
+            'smp:maxzoom': 5,
+            'smp:bufferTiles': 1.5,
+          },
+        }),
+      },
+    ])
+    const result = await validate(filepath)
+    assert(hasError(result, 'invalid_smp_buffer_tiles'))
+  })
+
+  test('smp:bufferTiles negative → error', async () => {
+    const filepath = await createZipFile([
+      { name: 'VERSION', data: '1.0\n' },
+      {
+        name: 'style.json',
+        data: JSON.stringify({
+          version: 8,
+          sources: {},
+          layers: [],
+          metadata: {
+            'smp:bounds': [-180, -85, 180, 85],
+            'smp:maxzoom': 5,
+            'smp:bufferTiles': -1,
+          },
+        }),
+      },
+    ])
+    const result = await validate(filepath)
+    assert(hasError(result, 'invalid_smp_buffer_tiles'))
+  })
+
+  test('missing smp:bufferTiles is valid (optional)', async () => {
+    const filepath = await createZipFile([
+      { name: 'VERSION', data: '1.0\n' },
+      {
+        name: 'style.json',
+        data: JSON.stringify({
+          version: 8,
+          sources: {},
+          layers: [],
+          metadata: { 'smp:bounds': [-180, -85, 180, 85], 'smp:maxzoom': 5 },
+        }),
+      },
+    ])
+    const result = await validate(filepath)
+    assert(!hasError(result, 'invalid_smp_buffer_tiles'))
+  })
+
   test('missing smp:sourceFolders is valid (optional)', async () => {
     const filepath = await createZipFile([
       { name: 'VERSION', data: '1.0\n' },

@@ -3,7 +3,7 @@
  * @property {number} port
  * @property {string} filepath
  * @property {boolean} [open]
- * @property {boolean} [fallback]
+ * @property {boolean} [fallback] Serve empty tiles and fallback glyphs for missing resources. Defaults to `true`; pass `false` to return 404s instead.
  */
 
 /**
@@ -26,13 +26,19 @@
 export async function runView({ port, filepath, open, fallback }, deps) {
   const { Reader, createServer, openApp, log, readViewerHtml } = deps
 
+  // Fallback is on by default; pass `fallback: false` to disable it. Pass the
+  // handlers explicitly (null to disable) rather than relying on the server's
+  // own defaults, since the CLI uses Noto glyphs rather than empty ones.
+  const useFallback = fallback !== false
+
   const reader = new Reader(filepath)
   const smpServer = createServer({
     base: '/map',
-    ...(fallback && {
-      fallbackTile: deps.emptyTileFallback,
-      fallbackGlyph: deps.emptyGlyphFallback,
-    }),
+    // Render buffer tiles that lie outside the data bounds for packages written
+    // with `smp:bufferTiles`. No-op for packages without that metadata.
+    expandBounds: true,
+    fallbackTile: useFallback ? deps.emptyTileFallback : null,
+    fallbackGlyph: useFallback ? deps.emptyGlyphFallback : null,
   })
 
   /** @param {Request} request */

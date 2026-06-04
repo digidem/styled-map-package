@@ -1,3 +1,4 @@
+import SphericalMercator from '@mapbox/sphericalmercator'
 import { validateStyleMin, migrate } from '@maplibre/maplibre-gl-style-spec'
 import { bbox } from '@turf/bbox'
 import { excludeKeys } from 'filter-obj'
@@ -26,10 +27,18 @@ import {
 /** @typedef {`${number}-${number}`} GlyphRange */
 /** @typedef {'png' | 'mvt' | 'jpg' | 'webp'} TileFormat */
 /**
+ * @typedef {object} TileExtent
+ * @property {number} minX
+ * @property {number} minY
+ * @property {number} maxX
+ * @property {number} maxY
+ */
+/**
  * @typedef {object} SourceInfo
  * @property {import('./types.js').SMPSource} source
  * @property {string} encodedSourceId
  * @property {TileFormat} [format]
+ * @property {Map<number, TileExtent>} [tileExtents] Tile column/row extent per zoom level, used to infer the bounds buffer (see {@link Writer#getBufferTiles}).
  */
 /**
  * @typedef {object} TileInfo
@@ -209,6 +218,44 @@ export class Writer {
   }
 
   /**
+   * Infer the bounds buffer: the largest number of extra tile rings that extend
+   * beyond a source's `bounds` at any zoom level below its max zoom.
+   *
+   * `bounds` is derived from the tiles at max zoom, so at lower zooms the same
+   * tile coordinates that the buffer added show up as tiles outside `bounds`.
+   * Returns `0` when no source has tiles beyond its bounds (no buffer, or only
+   * max-zoom tiles are present). The value is a hint and may be approximate near
+   * the antimeridian/poles where the buffer is clamped — see spec §4.3.4.
+   *
+   * @returns {number}
+   */
+  #getBufferTiles() {
+    const sm = new SphericalMercator({ size: 256 })
+    let bufferTiles = 0
+    for (const { source, tileExtents } of this.#sources.values()) {
+      if (
+        !tileExtents ||
+        (source.type !== 'raster' && source.type !== 'vector')
+      ) {
+        continue
+      }
+      for (const [z, extent] of tileExtents) {
+        if (z >= source.maxzoom) continue
+        const b = sm.xyz([...source.bounds], z)
+        const ring = Math.max(
+          b.minX - extent.minX,
+          extent.maxX - b.maxX,
+          b.minY - extent.minY,
+          extent.maxY - b.maxY,
+          0,
+        )
+        bufferTiles = Math.max(bufferTiles, ring)
+      }
+    }
+    return bufferTiles
+  }
+
+  /**
    * Add a source definition to the styled map package
    *
    * @param {string} sourceId
@@ -310,6 +357,19 @@ export class Writer {
       source.bounds = bbox
     } else if (z === source.maxzoom) {
       source.bounds = unionBBox([source.bounds, bbox])
+    }
+
+    // Track the tile extent per zoom level so the bounds buffer can be inferred
+    // from how far the lower-zoom tiles extend beyond `source.bounds`.
+    const tileExtents = (sourceInfo.tileExtents ??= new Map())
+    const extent = tileExtents.get(z)
+    if (!extent) {
+      tileExtents.set(z, { minX: x, minY: y, maxX: x, maxY: y })
+    } else {
+      if (x < extent.minX) extent.minX = x
+      if (x > extent.maxX) extent.maxX = x
+      if (y < extent.minY) extent.minY = y
+      if (y > extent.maxY) extent.maxY = y
     }
 
     const name = getTileFilename({ sourceId: encodedSourceId, z, x, y, format })
@@ -486,6 +546,10 @@ export class Writer {
       this.#style.center = [w + (e - w) / 2, s + (n - s) / 2]
     }
     metadata['smp:maxzoom'] = this.#getMaxZoom()
+    const bufferTiles = this.#getBufferTiles()
+    if (bufferTiles > 0) {
+      metadata['smp:bufferTiles'] = bufferTiles
+    }
     /** @type {Record<string, string>} */
     metadata['smp:sourceFolders'] = {}
     for (const [sourceId, { encodedSourceId }] of this.#sources) {

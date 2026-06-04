@@ -1,3 +1,5 @@
+import { ZipReader } from '@gmaclennan/zip-reader'
+import { BufferSource } from '@gmaclennan/zip-reader/buffer-source'
 import { onTestFinished, test } from 'vitest'
 
 import assert from 'node:assert/strict'
@@ -5,8 +7,134 @@ import { fileURLToPath } from 'node:url'
 
 import { Reader } from '../lib/reader.js'
 import { createServer } from '../lib/server.js'
+import { tileIterator } from '../lib/tile-downloader.js'
+import { MAX_BOUNDS } from '../lib/utils/geo.js'
 import { validateStyle } from '../lib/utils/style.js'
 import { replaceVariables } from '../lib/utils/templates.js'
+import { Writer } from '../lib/writer.js'
+import { streamToBuffer } from './utils/stream-consumers.js'
+
+/**
+ * Build an in-memory SMP with a single vector source, optionally with a tile
+ * buffer (which the Writer infers into `smp:bufferTiles`). Returns a Reader.
+ * @param {number} [bufferTiles]
+ */
+async function buildSmp(bufferTiles = 0) {
+  const styleIn = {
+    version: 8,
+    sources: {
+      src: { type: 'vector', tiles: ['https://example.com/{z}/{x}/{y}.mvt'] },
+    },
+    layers: [{ id: 'bg', type: 'background' }],
+  }
+  const writer = new Writer(styleIn)
+  const smpPromise = streamToBuffer(writer.outputStream)
+  // Small area within a much larger source extent so the buffer has effect.
+  const bounds = /** @type {const} */ ([10, 10, 11, 11])
+  const sourceBounds = /** @type {const} */ ([-180, -85, 180, 85])
+  for (const { x, y, z } of tileIterator({
+    minzoom: 0,
+    maxzoom: 5,
+    bounds,
+    sourceBounds,
+    bufferTiles,
+  })) {
+    await writer.addTile(new Uint8Array([1, 2, 3]), {
+      x,
+      y,
+      z,
+      sourceId: 'src',
+      format: 'mvt',
+    })
+  }
+  writer.finish()
+  const smp = await smpPromise
+  return new Reader(await ZipReader.from(new BufferSource(smp)))
+}
+
+/**
+ * @param {Reader} reader
+ * @param {Parameters<typeof createServer>[0]} [opts]
+ */
+async function fetchStyle(reader, opts) {
+  const server = createServer(opts)
+  const response = await server.fetch(
+    new Request('http://example.com/style.json'),
+    reader,
+  )
+  return JSON.parse(new TextDecoder().decode(await response.arrayBuffer()))
+}
+
+test('expandBounds (on by default) widens tile source bounds when smp:bufferTiles is set', async () => {
+  const reader = await buildSmp(1)
+  onTestFinished(() => reader.close())
+
+  const style = await fetchStyle(reader)
+  assert.deepEqual(
+    style.sources.src.bounds,
+    [...MAX_BOUNDS],
+    'bounds widened to global',
+  )
+  assert(style.metadata['smp:bounds'], 'smp:bounds metadata still present')
+  assert.notDeepEqual(
+    style.metadata['smp:bounds'],
+    [...MAX_BOUNDS],
+    'smp:bounds metadata is left untouched',
+  )
+})
+
+test('expandBounds: false leaves tile source bounds untouched even when smp:bufferTiles is set', async () => {
+  const reader = await buildSmp(1)
+  onTestFinished(() => reader.close())
+
+  const style = await fetchStyle(reader, { expandBounds: false })
+  assert.notDeepEqual(
+    style.sources.src.bounds,
+    [...MAX_BOUNDS],
+    'bounds not widened when option is off',
+  )
+})
+
+test('expandBounds is a no-op when package has no bufferTiles metadata', async () => {
+  const reader = await buildSmp()
+  onTestFinished(() => reader.close())
+
+  const style = await fetchStyle(reader, { expandBounds: true })
+  assert.notDeepEqual(
+    style.sources.src.bounds,
+    [...MAX_BOUNDS],
+    'bounds not widened without metadata flag',
+  )
+})
+
+test('default server serves an empty fallback tile for a missing tile', async () => {
+  const reader = await buildSmp()
+  onTestFinished(() => reader.close())
+
+  // s/0/5/0/0 is outside the written bounds ([10,10,11,11]), so it is not in the SMP
+  const server = createServer()
+  const response = await server.fetch(
+    new Request('http://example.com/s/0/5/0/0.mvt.gz'),
+    reader,
+  )
+  assert.equal(response.status, 200, 'missing tile served by default fallback')
+  assert.equal(
+    response.headers.get('content-type'),
+    'application/vnd.mapbox-vector-tile',
+  )
+})
+
+test('fallbackTile: null restores 404 for missing tiles', async () => {
+  const reader = await buildSmp()
+  onTestFinished(() => reader.close())
+
+  const server = createServer({ fallbackTile: null })
+  await assert.rejects(
+    () =>
+      server.fetch(new Request('http://example.com/s/0/5/0/0.mvt.gz'), reader),
+    { status: 404 },
+  )
+})
 
 test('server basic', async () => {
   const filepath = fileURLToPath(

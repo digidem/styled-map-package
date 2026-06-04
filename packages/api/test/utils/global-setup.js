@@ -20,7 +20,8 @@ export default async function setup({ provide }) {
     new URL('../fixtures/demotiles-z2.smp', import.meta.url),
   )
   const reader = new Reader(fixturePath)
-  const smpServer = createSMPServer()
+  // Emulate a real origin server: missing tiles/glyphs return 404, not fallbacks.
+  const smpServer = createSMPServer({ fallbackTile: null, fallbackGlyph: null })
 
   const adapter = createServerAdapter((request) => {
     return smpServer

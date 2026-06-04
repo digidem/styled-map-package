@@ -59,6 +59,7 @@ export function parseUrl(url) {
  * @property {string | undefined} token
  * @property {boolean | undefined} skipLocalGlyphs
  * @property {boolean | undefined} dedupe
+ * @property {boolean | undefined} bufferTiles When set, download one extra tile ring around the bbox at each zoom level below maxzoom.
  */
 
 /**
@@ -77,7 +78,7 @@ export function parseUrl(url) {
  * @param {DownloadDeps} deps
  */
 export async function runDownload(
-  { styleUrl, bbox, zoom, output, token, skipLocalGlyphs, dedupe },
+  { styleUrl, bbox, zoom, output, token, skipLocalGlyphs, dedupe, bufferTiles },
   deps,
 ) {
   const { download, prompt, isMapboxURL, mapboxApiUrl, isTTY } = deps
@@ -181,6 +182,8 @@ export async function runDownload(
     mapboxAccessToken: token,
     skipLocalGlyphs,
     dedupe,
+    // `--buffer-tiles` is a boolean flag on the CLI; map it to a one-tile ring.
+    bufferTiles: bufferTiles ? 1 : 0,
   })
   const outputStream = deps.createOutputStream(output)
   await readStream.pipeTo(
