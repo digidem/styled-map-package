@@ -9,6 +9,9 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.changesets.outputs.published }}
+      publishedPackages: ${{ steps.changesets.outputs.publishedPackages }}
     permissions:
       contents: write
       pull-requests: write
@@ -41,6 +44,7 @@ jobs:
         run: npm run build --workspaces --if-present
 
       - name: Create release PR or publish
+        id: changesets
         uses: changesets/action@6a0a831ff30acef54f2c6aa1cbbc1096b066edaf # v1.7.0
         with:
           publish: npm run release
@@ -50,3 +54,34 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           NPM_CONFIG_PROVENANCE: true
+
+  # When changesets publishes (the "Version Packages" PR merged), tell downstream
+  # repos to fast-track each published package, rather than waiting for their daily
+  # Dependabot run. Receiver: digidem/comapeo-core-react-native.
+  notify-downstream:
+    needs: release
+    if: needs.release.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        downstream:
+          - owner: digidem
+            repo: comapeo-core-react-native
+    steps:
+      - uses: actions/create-github-app-token@v3
+        id: token
+        with:
+          app-id: ${{ vars.RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          owner: ${{ matrix.downstream.owner }}
+          repositories: ${{ matrix.downstream.repo }}
+      - env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          PUBLISHED: ${{ needs.release.outputs.publishedPackages }}
+        run: |
+          echo "$PUBLISHED" | jq -r '.[].name' | while read -r pkg; do
+            gh api repos/${{ matrix.downstream.owner }}/${{ matrix.downstream.repo }}/dispatches \
+              -f event_type=first-party-release \
+              -f "client_payload[package]=$pkg"
+          done
