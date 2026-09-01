@@ -646,24 +646,29 @@ test('server propagates fallbackGlyph errors', async () => {
   )
 })
 
-test('server handles style with no glyphs template', async () => {
+/**
+ * A reader whose style has no `glyphs` property and no resources on disk.
+ * @returns {any}
+ */
+function noGlyphsMockReader() {
   const URI_BASE = 'smp://maps.v1/'
-
-  const mockReader = {
-    getStyle() {
+  return {
+    getStyle(/** @type {string | undefined} */ baseUrl) {
+      const tile = baseUrl
+        ? baseUrl + 's/0/{z}/{x}/{y}.mvt.gz'
+        : URI_BASE + 's/0/{z}/{x}/{y}.mvt.gz'
       return Promise.resolve({
         version: 8,
         sources: {
           src: {
             type: 'vector',
-            tiles: [URI_BASE + 's/0/{z}/{x}/{y}.mvt.gz'],
+            tiles: [tile],
             bounds: [-180, -85, 180, 85],
             minzoom: 0,
             maxzoom: 14,
           },
         },
         layers: [],
-        // No glyphs property
         metadata: { 'smp:bounds': [-180, -85, 180, 85], 'smp:maxzoom': 14 },
       })
     },
@@ -673,22 +678,103 @@ test('server handles style with no glyphs template', async () => {
       return Promise.reject(err)
     },
   }
+}
 
-  let glyphCalled = false
+test('server serves fallback glyphs for style with no glyphs template', async () => {
+  const mockReader = noGlyphsMockReader()
+
+  /** @type {[string, string][]} */
+  const glyphCalls = []
   const server = createServer({
-    fallbackGlyph() {
-      glyphCalled = true
-      return new Response('should not reach')
+    fallbackGlyph(fontstack, range) {
+      glyphCalls.push([fontstack, range])
+      return new Response('fallback glyph')
     },
   })
 
-  // A request that looks like a glyph path should 404, not call fallbackGlyph
-  const responsePromise = server.fetch(
+  const response = await server.fetch(
     new Request('http://example.com/fonts/SomeFont/0-255.pbf.gz'),
-    /** @type {any} */ (mockReader),
+    mockReader,
   )
-  await assert.rejects(() => responsePromise, { status: 404 })
-  assert.equal(glyphCalled, false)
+  assert.equal(response.status, 200)
+  assert.equal(await response.text(), 'fallback glyph')
+  assert.deepEqual(glyphCalls, [['SomeFont', '0-255']])
+})
+
+test('server advertises glyphs URL for style with no glyphs template', async () => {
+  const server = createServer()
+  const response = await server.fetch(
+    new Request('http://example.com/style.json'),
+    noGlyphsMockReader(),
+  )
+  const style = await response.json()
+  assert.equal(
+    style.glyphs,
+    'http://example.com/fonts/{fontstack}/{range}.pbf.gz',
+  )
+})
+
+test('server serves and advertises fallback glyphs for a real glyph-less package', async () => {
+  const reader = await buildSmp()
+  onTestFinished(() => reader.close())
+
+  const style = await fetchStyle(reader)
+  assert.equal(
+    style.glyphs,
+    'http://example.com/fonts/{fontstack}/{range}.pbf.gz',
+  )
+  assert(validateStyle(style), 'served style is still valid')
+
+  const server = createServer()
+  const response = await server.fetch(
+    new Request('http://example.com/fonts/Open%20Sans%20Regular/0-255.pbf.gz'),
+    reader,
+  )
+  assert.equal(response.status, 200)
+  assert.equal(response.headers.get('content-type'), 'application/x-protobuf')
+})
+
+test('glyphs advertised by a server with a base path are servable', async () => {
+  const mockReader = noGlyphsMockReader()
+  const server = createServer({ base: '/maps/:mapId/' })
+
+  const styleResponse = await server.fetch(
+    new Request('http://example.com/maps/abc/style.json'),
+    mockReader,
+  )
+  const glyphs = (await styleResponse.json()).glyphs
+  assert.equal(
+    glyphs,
+    'http://example.com/maps/abc/fonts/{fontstack}/{range}.pbf.gz',
+  )
+
+  const glyphResponse = await server.fetch(
+    new Request(
+      replaceVariables(glyphs, { fontstack: 'SomeFont', range: '0-255' }),
+    ),
+    mockReader,
+  )
+  assert.equal(glyphResponse.status, 200)
+})
+
+test('server with fallbackGlyph null does not add glyphs or serve them', async () => {
+  const mockReader = noGlyphsMockReader()
+  const server = createServer({ fallbackGlyph: null })
+
+  const styleResponse = await server.fetch(
+    new Request('http://example.com/style.json'),
+    mockReader,
+  )
+  assert.equal((await styleResponse.json()).glyphs, undefined)
+
+  await assert.rejects(
+    () =>
+      server.fetch(
+        new Request('http://example.com/fonts/SomeFont/0-255.pbf.gz'),
+        mockReader,
+      ),
+    { status: 404 },
+  )
 })
 
 test('server with parameter in base path', async () => {

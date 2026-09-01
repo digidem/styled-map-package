@@ -19,7 +19,7 @@ const TILE_FILE = SOURCES_FOLDER + '/{sourceId}/{z}/{x}/{y}{ext}'
 const SPRITE_FILE = SPRITES_FOLDER + '/{id}/sprite{pixelRatio}{ext}'
 // This must include placeholders `{fontstack}` and `{range}`, since these are
 // part of the MapLibre style spec.
-const GLYPH_FILE = FONTS_FOLDER + '/{fontstack}/{range}.pbf.gz'
+export const GLYPH_FILE = FONTS_FOLDER + '/{fontstack}/{range}.pbf.gz'
 export const GLYPH_URI = URI_BASE + GLYPH_FILE
 
 const pathToResouceType = /** @type {const} */ ({
