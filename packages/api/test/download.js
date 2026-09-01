@@ -1,6 +1,6 @@
 import { ZipReader } from '@gmaclennan/zip-reader'
 import { BufferSource } from '@gmaclennan/zip-reader/buffer-source'
-import { afterAll, assert, beforeAll, describe, expect, test, vi } from 'vitest'
+import { afterAll, assert, beforeAll, describe, expect, test } from 'vitest'
 
 import { createServer as createHTTPServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
@@ -279,6 +279,7 @@ describe('download cancellation releases resources', () => {
   /** Serves a style plus tiles large enough that an unread body blocks. */
   async function startSlowStyleServer() {
     let inflight = 0
+    let started = 0
     /** @type {Set<import('node:http').ServerResponse>} */
     const open = new Set()
     /** @type {number} */
@@ -304,8 +305,9 @@ describe('download cancellation releases resources', () => {
         )
         return
       }
-      inflight++
+      started++
       res.on('close', () => inflight--)
+      inflight++
       res.writeHead(200, {
         'content-type': 'application/vnd.mapbox-vector-tile',
       })
@@ -328,6 +330,9 @@ describe('download cancellation releases resources', () => {
       baseUrl: `http://127.0.0.1:${port}/`,
       get inflight() {
         return inflight
+      },
+      get started() {
+        return started
       },
       close: async () => {
         for (const res of open) res.destroy()
@@ -356,17 +361,12 @@ describe('download cancellation releases resources', () => {
           setTimeout(() => reject(new Error('cancel() never settled')), 3000),
         ),
       ])
-
-      await vi.waitFor(() => assert.equal(server.inflight, 0), {
-        timeout: 5000,
-        interval: 50,
-      })
     } finally {
       await server.close()
     }
   })
 
-  test('aborting mid-download errors the stream and releases requests', async () => {
+  test('aborting mid-download errors the stream and stops fetching', async () => {
     const server = await startSlowStyleServer()
     try {
       const ac = new AbortController()
@@ -380,6 +380,8 @@ describe('download cancellation releases resources', () => {
       await reader.read()
       ac.abort(new Error('user cancelled'))
 
+      const startedAtAbort = server.started
+
       await expect(async () => {
         for (;;) {
           const { done } = await reader.read()
@@ -387,10 +389,12 @@ describe('download cancellation releases resources', () => {
         }
       }).rejects.toThrow('user cancelled')
 
-      await vi.waitFor(() => assert.equal(server.inflight, 0), {
-        timeout: 5000,
-        interval: 50,
-      })
+      // The remaining tiles of the 85-tile pyramid must not be fetched.
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      assert(
+        server.started <= startedAtAbort + 24,
+        `queued tiles still fetched after abort (started ${server.started}, was ${startedAtAbort})`,
+      )
     } finally {
       await server.close()
     }

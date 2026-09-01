@@ -191,7 +191,7 @@ export class StyleDownloader {
    * ratio. Downloads pixel ratios `1` and `2`.
    *
    * @param {object} [opts]
-   * @param {AbortSignal} [opts.signal] Abort in-flight and pending sprite downloads
+   * @param {AbortSignal} [opts.signal] Stop issuing downloads once aborted
    * @returns {AsyncGenerator<{ json: ReadableStream<Uint8Array>, png: ReadableStream<Uint8Array>, id: string, pixelRatio: number }>}
    */
   async *getSprites({ signal } = {}) {
@@ -206,21 +206,11 @@ export class StyleDownloader {
         const format = pixelRatio === 1 ? '' : '@2x'
         const jsonUrl = normalizeSpriteURL(url, format, '.json', accessToken)
         const pngUrl = normalizeSpriteURL(url, format, '.png', accessToken)
-        const jsonRequest = this.#fetchQueue.fetch(jsonUrl, { signal })
-        const pngRequest = this.#fetchQueue.fetch(pngUrl, { signal })
-        // Cancel the sibling if only one of the pair arrives, otherwise its
-        // unread body holds a concurrency slot for the rest of the download.
-        const [json, png] = await Promise.all([
-          jsonRequest.catch((err) => {
-            pngRequest.then((res) => res.body.cancel(err).catch(noop), noop)
-            throw err
-          }),
-          pngRequest.catch((err) => {
-            jsonRequest.then((res) => res.body.cancel(err).catch(noop), noop)
-            throw err
-          }),
+        const [{ body: json }, { body: png }] = await Promise.all([
+          this.#fetchQueue.fetch(jsonUrl, { signal }),
+          this.#fetchQueue.fetch(pngUrl, { signal }),
         ])
-        yield { json: json.body, png: png.body, id, pixelRatio }
+        yield { json, png, id, pixelRatio }
       }
     }
   }
@@ -238,7 +228,7 @@ export class StyleDownloader {
    * @param {object} opts
    * @param {(progress: GlyphDownloadStats) => void} [opts.onprogress]
    * @param {boolean} [opts.skipLocalGlyphs] Skip glyph ranges rendered client-side by MapLibre GL via localIdeographFontFamily (CJK, Hangul, Kana, Yi, etc.)
-   * @param {AbortSignal} [opts.signal] Abort in-flight and pending glyph downloads
+   * @param {AbortSignal} [opts.signal] Stop issuing downloads once aborted
    * @returns {AsyncGenerator<[ReadableStream<Uint8Array>, GlyphInfo]>}
    */
   async *getGlyphs({
@@ -268,9 +258,6 @@ export class StyleDownloader {
 
     /** @type {Queue<[Promise<void | DownloadResponse>, GlyphInfo]>} */
     const queue = new Queue()
-    /** @type {Set<ReadableStream<Uint8Array>>} */
-    const yielded = new Set()
-    let allGlyphsYielded = false
     /** @type {Map<string, string>} */
     const fontStacks = new Map()
     mapFontStacks(style.layers, (fontStack) => {
@@ -282,69 +269,39 @@ export class StyleDownloader {
     })
     const glyphUrl = normalizeGlyphsURL(style.glyphs, this.#mapboxAccessToken)
 
-    try {
-      for (const [font, fontStack] of fontStacks.entries()) {
-        for (let i = 0; i < Math.pow(2, 16); i += 256) {
-          if (skipLocalGlyphs && isLocallyRenderedRange(i)) continue
-          /** @type {GlyphRange} */
-          const range = `${i}-${i + 255}`
-          const url = glyphUrl
-            .replace('{fontstack}', fontStack)
-            .replace('{range}', range)
-          const result = this.#fetchQueue
-            .fetch(url, { onprogress: onDownloadProgress, signal })
-            // TODO: Handle errors downloading glyphs
-            .catch(noop)
-          queue.enqueue([result, { font, range }])
-        }
+    for (const [font, fontStack] of fontStacks.entries()) {
+      for (let i = 0; i < Math.pow(2, 16); i += 256) {
+        if (skipLocalGlyphs && isLocallyRenderedRange(i)) continue
+        /** @type {GlyphRange} */
+        const range = `${i}-${i + 255}`
+        const url = glyphUrl
+          .replace('{fontstack}', fontStack)
+          .replace('{range}', range)
+        const result = this.#fetchQueue
+          .fetch(url, { onprogress: onDownloadProgress, signal })
+          // TODO: Handle errors downloading glyphs
+          .catch(noop)
+        queue.enqueue([result, { font, range }])
       }
+    }
 
-      stats.total = queue.size
-      if (onprogress) onprogress(stats)
+    stats.total = queue.size
+    if (onprogress) onprogress(stats)
 
-      // Dequeue as we go, so cleanup below only sees undelivered downloads.
-      while (queue.size > 0) {
-        // See downloadTiles: without this the aborted queue drains to a normal
-        // return and the cleanup below is skipped.
-        signal?.throwIfAborted()
-        const [result, glyphInfo] =
-          /** @type {[Promise<void | DownloadResponse>, GlyphInfo]} */ (
-            queue.dequeue()
-          )
-        // TODO: Handle errors downloading glyphs
-        const downloadResponse = await result.catch(noop)
-        if (!downloadResponse) continue
-        const { body } = downloadResponse
-        // Glyphs are always gzipped. Unfortunately we can't stop fetch from ungzipping, so we need to re-gzip it.
-        // Pipe body directly into the CompressionStream so pipeTo's resolved promise signals when consumer is done.
-        const gzip = /** @type {TransformStream<Uint8Array, Uint8Array>} */ (
-          new CompressionStream('gzip')
-        )
-        const gzippedStream = gzip.readable
-        yielded.add(gzippedStream)
-        body
-          .pipeTo(gzip.writable)
-          .then(onDownloadComplete, noop)
-          .finally(() => yielded.delete(gzippedStream))
-        yield [gzippedStream, glyphInfo]
-      }
-      allGlyphsYielded = true
-    } finally {
-      // See downloadTiles: on early termination an already-issued download
-      // holds its concurrency slot until its body is consumed, and aborting
-      // `signal` does not release a body blocked writing into an unread stream.
-      if (!allGlyphsYielded) {
-        const reason = new DOMException(
-          'Glyph download cancelled',
-          'AbortError',
-        )
-        for (const [result] of queue) {
-          result.then((res) => res && res.body.cancel(reason).catch(noop), noop)
-        }
-        for (const stream of yielded) {
-          if (!stream.locked) stream.cancel(reason).catch(noop)
-        }
-      }
+    for (const [result, glyphInfo] of queue) {
+      signal?.throwIfAborted()
+      // TODO: Handle errors downloading glyphs
+      const downloadResponse = await result.catch(noop)
+      if (!downloadResponse) continue
+      const { body } = downloadResponse
+      // Glyphs are always gzipped. Unfortunately we can't stop fetch from ungzipping, so we need to re-gzip it.
+      // Pipe body directly into the CompressionStream so pipeTo's resolved promise signals when consumer is done.
+      const gzip = /** @type {TransformStream<Uint8Array, Uint8Array>} */ (
+        new CompressionStream('gzip')
+      )
+      body.pipeTo(gzip.writable).then(onDownloadComplete, noop)
+      const gzippedStream = gzip.readable
+      yield [gzippedStream, glyphInfo]
     }
   }
 
@@ -364,7 +321,7 @@ export class StyleDownloader {
    * @param {(progress: TileDownloadStats) => void} [opts.onprogress]
    * @param {number} [opts.bufferTiles=0] Number of extra tile rings to download around the bounds at each zoom level below maxzoom, so the map is not clipped at the edges of the downloaded area when zooming out.
    * @param {boolean} [opts.trackErrors=false] Include errors in the returned array of skipped tiles - this has memory overhead so should only be used for debugging.
-   * @param {AbortSignal} [opts.signal] Abort in-flight and pending tile downloads
+   * @param {AbortSignal} [opts.signal] Stop issuing downloads once aborted
    * @returns {AsyncGenerator<[ReadableStream<Uint8Array>, TileInfo]> & { readonly skipped: Array<TileInfo & { error?: Error }>, readonly stats: TileDownloadStats }}
    */
   getTiles({
