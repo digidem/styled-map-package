@@ -1,6 +1,6 @@
 import { ZipReader } from '@gmaclennan/zip-reader'
 import { BufferSource } from '@gmaclennan/zip-reader/buffer-source'
-import { afterAll, assert, beforeAll, describe, expect, test } from 'vitest'
+import { afterAll, assert, beforeAll, describe, expect, test, vi } from 'vitest'
 
 import { createServer as createHTTPServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
@@ -389,8 +389,12 @@ describe('download cancellation releases resources', () => {
         }
       }).rejects.toThrow('user cancelled')
 
-      // The remaining tiles of the 85-tile pyramid must not be fetched.
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      // The remaining tiles of the 85-tile pyramid must not be fetched, and
+      // the connections already open must be released rather than left live.
+      await vi.waitFor(() => assert.equal(server.inflight, 0), {
+        timeout: 5000,
+        interval: 50,
+      })
       assert(
         server.started <= startedAtAbort + 24,
         `queued tiles still fetched after abort (started ${server.started}, was ${startedAtAbort})`,

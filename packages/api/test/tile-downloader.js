@@ -1,4 +1,4 @@
-import { afterAll, assert, beforeAll, describe, test } from 'vitest'
+import { afterAll, assert, beforeAll, describe, test, vi } from 'vitest'
 
 import { createServer as createHTTPServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
@@ -430,9 +430,13 @@ describe('downloadTiles cancellation', () => {
       }
 
       const startedAtAbort = server.started
-      // Requests already on the wire may still land; the queued remainder of
-      // the 85 tiles must not be fetched at all.
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      // Aborting must both stop the queued remainder of the 85 tiles and
+      // release the connections already open, which otherwise stay live and
+      // hold their concurrency slot for good.
+      await vi.waitFor(() => assert.equal(server.inflight, 0), {
+        timeout: 5000,
+        interval: 50,
+      })
       assert(
         server.started <= startedAtAbort + 4,
         `no queued tiles fetched after abort (started ${server.started}, was ${startedAtAbort})`,
