@@ -132,6 +132,10 @@ const server = createServer({
 })
 ```
 
+#### Packages with no glyphs
+
+A style with no labels is packaged without a `glyphs` property, so nothing in it would ever request a glyph. When `fallbackGlyph` is set (the default), the server still serves glyph requests at the standard SMP glyph path and adds that path as `glyphs` to the served `style.json`. A client that adds its own symbol layer to such a map therefore gets fallback glyphs — empty ones by default, or real ones with `notoGlyphFallback` — instead of a 404. The stored `style.json` is left unchanged, and with `fallbackGlyph: null` no `glyphs` property is added.
+
 ### Rendering buffer tiles (`expandBounds`)
 
 When `download()` is given a [`bufferTiles`](#downloading-a-map-for-offline-use) value, it downloads extra tile rings around the requested area at every zoom level below maxzoom and records the count as `smp:bufferTiles` in the style metadata. `smp:bounds` is derived from the tile extent at the maximum zoom level (which carries no buffer), so at lower zoom levels these buffer tiles extend geographically beyond the source `bounds` and MapLibre will not request them by default.

@@ -5,7 +5,7 @@ import { createResponse } from 'itty-router/createResponse'
 import { emptyGlyphFallback, emptyTileFallback } from './fallbacks.js'
 import { isFileNotThereError } from './utils/errors.js'
 import { MAX_BOUNDS } from './utils/geo.js'
-import { URI_BASE, templateToRegex } from './utils/templates.js'
+import { GLYPH_FILE, URI_BASE, templateToRegex } from './utils/templates.js'
 
 /** @import { Resource, Reader } from './reader.js' */
 /** @import {IRequestStrict, RequestLike} from 'itty-router' */
@@ -64,7 +64,7 @@ function json(obj) {
  * @param {object} [options]
  * @param {string} [options.base='/'] Base path for the server routes
  * @param {((tileId: { x: number, y: number, z: number }, sourceInfo: { sourceId: string, source: import('./types.js').SMPSource }) => Response | Promise<Response>) | null} [options.fallbackTile] Called when a tile is missing from the SMP. Defaults to `emptyTileFallback` (format-aware empty tiles); pass `null` to return 404 instead.
- * @param {((fontstack: string, range: string) => Response | Promise<Response>) | null} [options.fallbackGlyph] Called when a glyph is missing from the SMP. Defaults to `emptyGlyphFallback` (empty PBFs); pass `null` to return 404 instead.
+ * @param {((fontstack: string, range: string) => Response | Promise<Response>) | null} [options.fallbackGlyph] Called when a glyph is missing from the SMP. Defaults to `emptyGlyphFallback` (empty PBFs); pass `null` to return 404 instead. When set, packages whose style has no `glyphs` still serve glyph requests at the standard SMP glyph path, and the served `style.json` advertises that path, so clients can add their own text layers.
  * @param {boolean} [options.expandBounds=true] When the package was written with buffer tiles (`metadata['smp:bufferTiles']`), widen each tile source's `bounds` to the whole world in the served `style.json`, so the lower-zoom buffer tiles (which extend beyond `smp:bounds`) are requested and rendered. Pair with `fallbackTile` so that tiles outside the downloaded area resolve to empty tiles rather than 404s.
  * @returns {{ fetch: (request: RequestLike, reader: ReaderLike) => Promise<Response> }} server instance
  */
@@ -104,6 +104,9 @@ export function createServer({
     .get('/style.json', async (request, reader) => {
       const baseUrl = new URL('.', request.url)
       const style = await reader.getStyle(baseUrl.href)
+      if (fallbackGlyph && !style.glyphs) {
+        style.glyphs = baseUrl.href + GLYPH_FILE
+      }
       if (expandBounds && style.metadata?.['smp:bufferTiles']) {
         for (const source of Object.values(style.sources)) {
           if (source.type === 'raster' || source.type === 'vector') {
@@ -216,14 +219,17 @@ function buildTileMatchers(sources) {
 const GLYPH_PLACEHOLDERS = { fontstack: '.+', range: '[^/]+' }
 
 /**
- * Build a regex to parse fontstack and range from a glyph resource path,
- * based on the style's glyphs URI template.
+ * Build a regex to parse fontstack and range from a glyph resource path, based
+ * on the style's glyphs URI template.
  *
  * @param {string | undefined} glyphsUri
  * @returns {RegExp | null}
  */
 function buildGlyphRegex(glyphsUri) {
-  if (!glyphsUri || !glyphsUri.startsWith(URI_BASE)) return null
+  // Must stay in step with the glyphs URL the style route advertises for
+  // packages that have none.
+  if (!glyphsUri) return templateToRegex(GLYPH_FILE, GLYPH_PLACEHOLDERS)
+  if (!glyphsUri.startsWith(URI_BASE)) return null
   const template = glyphsUri.slice(URI_BASE.length)
   if (
     !template.includes('{fontstack}') ||
