@@ -1,7 +1,8 @@
 import { ZipReader } from '@gmaclennan/zip-reader'
 import { BufferSource } from '@gmaclennan/zip-reader/buffer-source'
-import { afterAll, assert, beforeAll, describe, expect, test } from 'vitest'
+import { afterAll, assert, beforeAll, describe, expect, test, vi } from 'vitest'
 
+import { createServer as createHTTPServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
 
 import { download } from '../lib/download.js'
@@ -271,5 +272,127 @@ describe('download with osm-bright-z6 (sprites)', () => {
       last.sprites.downloaded > 0,
       `sprites downloaded: ${last.sprites.downloaded}`,
     )
+  })
+})
+
+describe('download cancellation releases resources', () => {
+  /** Serves a style plus tiles large enough that an unread body blocks. */
+  async function startSlowStyleServer() {
+    let inflight = 0
+    /** @type {Set<import('node:http').ServerResponse>} */
+    const open = new Set()
+    /** @type {number} */
+    let port
+    const server = createHTTPServer((req, res) => {
+      open.add(res)
+      res.on('close', () => open.delete(res))
+      if (req.url === '/style.json') {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(
+          JSON.stringify({
+            version: 8,
+            name: 'slow',
+            sources: {
+              t: {
+                type: 'vector',
+                tiles: [`http://127.0.0.1:${port}/{z}/{x}/{y}.mvt`],
+                maxzoom: 3,
+              },
+            },
+            layers: [],
+          }),
+        )
+        return
+      }
+      inflight++
+      res.on('close', () => inflight--)
+      res.writeHead(200, {
+        'content-type': 'application/vnd.mapbox-vector-tile',
+      })
+      let chunks = 0
+      const interval = setInterval(() => {
+        if (chunks++ > 16) {
+          clearInterval(interval)
+          res.end()
+          return
+        }
+        res.write(Buffer.alloc(64 * 1024, 1))
+      }, 5)
+      res.on('close', () => clearInterval(interval))
+    })
+    await new Promise((resolve) =>
+      server.listen(0, '127.0.0.1', () => resolve(undefined)),
+    )
+    port = /** @type {import('node:net').AddressInfo} */ (server.address()).port
+    return {
+      baseUrl: `http://127.0.0.1:${port}/`,
+      get inflight() {
+        return inflight
+      },
+      close: async () => {
+        for (const res of open) res.destroy()
+        server.closeAllConnections()
+        await new Promise((resolve) => server.close(resolve))
+      },
+    }
+  }
+
+  test('reader.cancel() settles when the output was never read', async () => {
+    const server = await startSlowStyleServer()
+    try {
+      const smpStream = download({
+        styleUrl: server.baseUrl + 'style.json',
+        bbox: [-180, -85, 180, 85],
+        maxzoom: 3,
+      })
+      const reader = smpStream.getReader()
+      // Never read: the writer backpressures on the unread output, which must
+      // not deadlock cancel() against the in-flight tile writes.
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
+      await Promise.race([
+        reader.cancel('no longer needed'),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('cancel() never settled')), 3000),
+        ),
+      ])
+
+      await vi.waitFor(() => assert.equal(server.inflight, 0), {
+        timeout: 5000,
+        interval: 50,
+      })
+    } finally {
+      await server.close()
+    }
+  })
+
+  test('aborting mid-download errors the stream and releases requests', async () => {
+    const server = await startSlowStyleServer()
+    try {
+      const ac = new AbortController()
+      const smpStream = download({
+        styleUrl: server.baseUrl + 'style.json',
+        bbox: [-180, -85, 180, 85],
+        maxzoom: 3,
+        signal: ac.signal,
+      })
+      const reader = smpStream.getReader()
+      await reader.read()
+      ac.abort(new Error('user cancelled'))
+
+      await expect(async () => {
+        for (;;) {
+          const { done } = await reader.read()
+          if (done) return
+        }
+      }).rejects.toThrow('user cancelled')
+
+      await vi.waitFor(() => assert.equal(server.inflight, 0), {
+        timeout: 5000,
+        interval: 50,
+      })
+    } finally {
+      await server.close()
+    }
   })
 })

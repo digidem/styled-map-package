@@ -404,6 +404,7 @@ describe('downloadTiles cancellation', () => {
           },
           close: async () => {
             for (const res of open) res.destroy()
+            server.closeAllConnections()
             await new Promise((r) => server.close(r))
           },
         })
@@ -429,6 +430,8 @@ describe('downloadTiles cancellation', () => {
         break
       }
 
+      // Without a signal the remaining queued tiles are still fetched and then
+      // cancelled after headers, which is what frees the slots.
       const next = fetchQueue.fetch(server.tileUrl.replace(/\{[zxy]\}/g, '0'))
       const { body } = await Promise.race([
         next,

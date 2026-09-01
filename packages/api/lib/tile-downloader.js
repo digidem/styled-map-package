@@ -109,7 +109,7 @@ export function downloadTiles({
           .fetch(tileURL, { onprogress: onDownloadProgress, signal })
           // We handle error here rather than below to avoid uncaught errors
           .catch((err) => {
-            if (!cancelled) onDownloadError(err, tileInfo)
+            if (!cancelled && !signal?.aborted) onDownloadError(err, tileInfo)
           })
         queue.enqueue([result, tileInfo])
       }
@@ -119,6 +119,10 @@ export function downloadTiles({
 
       // Dequeue as we go, so cleanup below only sees undelivered downloads.
       while (queue.size > 0) {
+        // Once aborted the rest of the queue rejects, which would otherwise
+        // drain to a normal return, skipping cleanup and recording every
+        // pending tile as skipped.
+        signal?.throwIfAborted()
         const [result, tileInfo] =
           /** @type {[Promise<void | import('./utils/fetch.js').DownloadResponse>, TileInfo]} */ (
             queue.dequeue()
@@ -150,7 +154,7 @@ export function downloadTiles({
         body
           .pipeTo(transform.writable)
           .then(onDownloadComplete, (err) => {
-            if (!cancelled) onDownloadError(err, tileInfo)
+            if (!cancelled && !signal?.aborted) onDownloadError(err, tileInfo)
           })
           .finally(() => yielded.delete(stream))
 

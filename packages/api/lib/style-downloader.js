@@ -304,6 +304,9 @@ export class StyleDownloader {
 
       // Dequeue as we go, so cleanup below only sees undelivered downloads.
       while (queue.size > 0) {
+        // See downloadTiles: without this the aborted queue drains to a normal
+        // return and the cleanup below is skipped.
+        signal?.throwIfAborted()
         const [result, glyphInfo] =
           /** @type {[Promise<void | DownloadResponse>, GlyphInfo]} */ (
             queue.dequeue()

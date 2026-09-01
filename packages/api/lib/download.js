@@ -160,8 +160,11 @@ export function download({
     },
     async cancel(reason) {
       pipeAbort.abort(reason)
-      await downloadDone
+      // Release the output before awaiting the download: `addTile` blocks
+      // writing into the zip stream while nobody reads it, which blocks the
+      // tile pipe's abort, which is what `downloadDone` is waiting on.
       await outputReader?.cancel(reason).catch(noop)
+      await downloadDone
     },
   })
 }
