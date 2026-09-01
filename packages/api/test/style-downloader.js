@@ -4,8 +4,17 @@ import { createServer as createHTTPServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
 
 import { StyleDownloader } from '../lib/style-downloader.js'
+import { isLocallyRenderedRange } from '../lib/utils/style.js'
 import { startSMPServer } from './utils/smp-server.js'
 import { streamToBuffer } from './utils/stream-consumers.js'
+
+/**
+ * The glyph tests each make ~100-255 localhost round-trips against the fixture
+ * server, which shares an event loop with Vitest's main process. On CPU-starved
+ * macOS CI runners (3 cores, plus a webkit browser project Linux does not run)
+ * that is enough to exceed the 5s default.
+ */
+const GLYPH_TEST_TIMEOUT = 30_000
 
 /** A minimal v7 style that should be auto-migrated to v8 */
 const V7_STYLE = {
@@ -171,39 +180,55 @@ describe('StyleDownloader with demotiles-z2', () => {
     assert.equal(sprites.length, 0)
   })
 
-  test('getGlyphs() yields glyph data for each font range', async () => {
-    const downloader = new StyleDownloader(server.baseUrl + 'style.json')
-    const glyphs = []
-    for await (const [stream, glyphInfo] of downloader.getGlyphs()) {
-      await streamToBuffer(stream)
-      glyphs.push(glyphInfo)
-    }
+  test(
+    'getGlyphs({ skipLocalGlyphs }) yields glyph data, skipping locally-rendered ranges',
+    { timeout: GLYPH_TEST_TIMEOUT },
+    async () => {
+      const downloader = new StyleDownloader(server.baseUrl + 'style.json')
+      const glyphs = []
+      for await (const [stream, glyphInfo] of downloader.getGlyphs({
+        skipLocalGlyphs: true,
+      })) {
+        await streamToBuffer(stream)
+        glyphs.push(glyphInfo)
+      }
 
-    assert(glyphs.length > 0, 'at least some glyphs downloaded')
-    // demotiles has 1 font: "Open Sans Semibold"
-    assert.equal(glyphs[0].font, 'Open Sans Semibold')
-    assert(typeof glyphs[0].range === 'string')
-    assert(glyphs[0].range.includes('-'), 'range has format "N-N"')
-  })
+      assert(glyphs.length > 0, 'at least some glyphs downloaded')
+      // demotiles has 1 font: "Open Sans Semibold"
+      assert.equal(glyphs[0].font, 'Open Sans Semibold')
+      assert(typeof glyphs[0].range === 'string')
+      assert(glyphs[0].range.includes('-'), 'range has format "N-N"')
 
-  test('getGlyphs() reports progress', async () => {
-    const downloader = new StyleDownloader(server.baseUrl + 'style.json')
-    /** @type {import('../lib/style-downloader.js').GlyphDownloadStats[]} */
-    const progressUpdates = []
-    const glyphs = downloader.getGlyphs({
-      onprogress: (stats) => progressUpdates.push({ ...stats }),
-    })
+      assert.equal(glyphs.length, 93, '163 of the 256 ranges are skipped')
+      const local = glyphs.filter(({ range }) =>
+        isLocallyRenderedRange(Number(range.split('-')[0])),
+      )
+      assert.deepEqual(local, [], 'no locally-rendered ranges downloaded')
+    },
+  )
 
-    for await (const [stream] of glyphs) {
-      await streamToBuffer(stream)
-    }
+  test(
+    'getGlyphs() reports progress',
+    { timeout: GLYPH_TEST_TIMEOUT },
+    async () => {
+      const downloader = new StyleDownloader(server.baseUrl + 'style.json')
+      /** @type {import('../lib/style-downloader.js').GlyphDownloadStats[]} */
+      const progressUpdates = []
+      const glyphs = downloader.getGlyphs({
+        onprogress: (stats) => progressUpdates.push({ ...stats }),
+      })
 
-    assert(progressUpdates.length > 0, 'onprogress was called')
-    const last = progressUpdates[progressUpdates.length - 1]
-    assert.equal(last.total, 256, '256 glyph ranges for 1 font')
-    assert(last.downloaded > 0, 'some glyphs downloaded')
-    assert(last.totalBytes > 0, 'totalBytes > 0')
-  })
+      for await (const [stream] of glyphs) {
+        await streamToBuffer(stream)
+      }
+
+      assert(progressUpdates.length > 0, 'onprogress was called')
+      const last = progressUpdates[progressUpdates.length - 1]
+      assert.equal(last.total, 256, '256 glyph ranges for 1 font')
+      assert(last.downloaded > 0, 'some glyphs downloaded')
+      assert(last.totalBytes > 0, 'totalBytes > 0')
+    },
+  )
 
   test('getGlyphs() yields nothing for style without glyphs', async () => {
     const style = {
