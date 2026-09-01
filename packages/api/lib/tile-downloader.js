@@ -34,6 +34,7 @@ import { noop } from './utils/misc.js'
  * @param {number} [opts.concurrency=8] Number of concurrent downloads (ignored if `fetchQueue` is provided)
  * @param {FetchQueue} [opts.fetchQueue=new FetchQueue(concurrency)] Optional fetch queue to use for downloading tiles
  * @param {'xyz' | 'tms'} [opts.scheme='xyz'] Tile scheme to use for tile URLs
+ * @param {AbortSignal} [opts.signal] Abort in-flight and pending tile downloads
  * @returns {AsyncGenerator<[ReadableStream<Uint8Array>, TileInfo]> & { readonly skipped: Array<TileInfo & { error?: Error }>, readonly stats: TileDownloadStats }}
  */
 export function downloadTiles({
@@ -48,6 +49,7 @@ export function downloadTiles({
   concurrency = 8,
   fetchQueue = new FetchQueue(concurrency),
   scheme = 'xyz',
+  signal,
 }) {
   /** @type {Array<TileInfo & { error?: Error }>} */
   const skipped = []
@@ -87,53 +89,90 @@ export function downloadTiles({
   const tiles = (async function* () {
     /** @type {Queue<[Promise<void | import('./utils/fetch.js').DownloadResponse>, TileInfo]>} */
     const queue = new Queue()
-    const tiles = tileIterator({
-      bounds,
-      minzoom,
-      maxzoom,
-      sourceBounds,
-      bufferTiles,
-    })
-    for (const { x, y, z } of tiles) {
-      const tileURL = getTileUrl(tileUrls, { x, y, z, scheme })
-      const tileInfo = { z, x, y }
-      const result = fetchQueue
-        .fetch(tileURL, { onprogress: onDownloadProgress })
-        // We handle error here rather than below to avoid uncaught errors
-        .catch((err) => onDownloadError(err, tileInfo))
-      queue.enqueue([result, tileInfo])
-    }
-
-    stats.total = queue.size
-    if (onprogress) onprogress(stats)
-
-    for (const [result, tileInfo] of queue) {
-      // We handle any error above and add to `skipped`
-      const downloadResponse = await result.catch(noop)
-      if (!downloadResponse) continue
-      let { body, mimeType } = downloadResponse
-      /** @type {import('./writer.js').TileFormat} */
-      let format
-      if (mimeType) {
-        format = getFormatFromMimeType(mimeType)
-      } else {
-        ;[format, body] = await getTileFormatFromStream(body)
+    /** Streams yielded to the consumer, removed once the consumer drains them. */
+    /** @type {Set<ReadableStream<Uint8Array>>} */
+    const yielded = new Set()
+    let completed = false
+    let cancelled = false
+    try {
+      const tiles = tileIterator({
+        bounds,
+        minzoom,
+        maxzoom,
+        sourceBounds,
+        bufferTiles,
+      })
+      for (const { x, y, z } of tiles) {
+        const tileURL = getTileUrl(tileUrls, { x, y, z, scheme })
+        const tileInfo = { z, x, y }
+        const result = fetchQueue
+          .fetch(tileURL, { onprogress: onDownloadProgress, signal })
+          // We handle error here rather than below to avoid uncaught errors
+          .catch((err) => {
+            if (!cancelled) onDownloadError(err, tileInfo)
+          })
+        queue.enqueue([result, tileInfo])
       }
 
-      let stream = body
-      // MVT tiles are always gzipped. Unfortunately we can't stop fetch from
-      // ungzipping the data during download, so we need to re-gzip it.
-      // Use the gzip transform (or a passthrough for other formats) as the pipe
-      // target so pipeTo's resolved promise signals when the consumer is done.
-      const transform = /** @type {TransformStream<Uint8Array, Uint8Array>} */ (
-        format === 'mvt' ? new CompressionStream('gzip') : new TransformStream()
-      )
-      body
-        .pipeTo(transform.writable)
-        .then(onDownloadComplete, (err) => onDownloadError(err, tileInfo))
-      stream = transform.readable
+      stats.total = queue.size
+      if (onprogress) onprogress(stats)
 
-      yield [stream, { ...tileInfo, format }]
+      // Dequeue as we go, so cleanup below only sees undelivered downloads.
+      while (queue.size > 0) {
+        const [result, tileInfo] =
+          /** @type {[Promise<void | import('./utils/fetch.js').DownloadResponse>, TileInfo]} */ (
+            queue.dequeue()
+          )
+        // We handle any error above and add to `skipped`
+        const downloadResponse = await result.catch(noop)
+        if (!downloadResponse) continue
+        let { body, mimeType } = downloadResponse
+        /** @type {import('./writer.js').TileFormat} */
+        let format
+        if (mimeType) {
+          format = getFormatFromMimeType(mimeType)
+        } else {
+          ;[format, body] = await getTileFormatFromStream(body)
+        }
+
+        // MVT tiles are always gzipped. Unfortunately we can't stop fetch from
+        // ungzipping the data during download, so we need to re-gzip it.
+        // Use the gzip transform (or a passthrough for other formats) as the pipe
+        // target so pipeTo's resolved promise signals when the consumer is done.
+        const transform =
+          /** @type {TransformStream<Uint8Array, Uint8Array>} */ (
+            format === 'mvt'
+              ? new CompressionStream('gzip')
+              : new TransformStream()
+          )
+        const stream = transform.readable
+        yielded.add(stream)
+        body
+          .pipeTo(transform.writable)
+          .then(onDownloadComplete, (err) => {
+            if (!cancelled) onDownloadError(err, tileInfo)
+          })
+          .finally(() => yielded.delete(stream))
+
+        yield [stream, { ...tileInfo, format }]
+      }
+      completed = true
+    } finally {
+      // Only on early termination: downloads already issued keep running and
+      // hold their concurrency slot until the body is consumed, so release
+      // everything the consumer will never read. Aborting `signal` does not
+      // release a body that is blocked writing into an unread stream. Streams
+      // the consumer has locked are its own to drain.
+      if (!completed) {
+        cancelled = true
+        const reason = new DOMException('Tile download cancelled', 'AbortError')
+        for (const [result] of queue) {
+          result.then((res) => res && res.body.cancel(reason).catch(noop), noop)
+        }
+        for (const stream of yielded) {
+          if (!stream.locked) stream.cancel(reason).catch(noop)
+        }
+      }
     }
   })()
 

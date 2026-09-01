@@ -63,6 +63,7 @@ export function download({
 
   /** @param {Partial<DownloadProgress>} update */
   function handleProgress(update) {
+    if (signal.aborted) return
     progress = { ...progress, ...update, elapsedMs: Date.now() - start }
     onprogress?.(progress)
   }
@@ -89,7 +90,7 @@ export function download({
 
       downloadDone = (async () => {
         try {
-          for await (const spriteInfo of downloader.getSprites()) {
+          for await (const spriteInfo of downloader.getSprites({ signal })) {
             await writer.addSprite(spriteInfo)
             handleProgress({
               sprites: {
@@ -104,6 +105,7 @@ export function download({
             bounds: bbox,
             maxzoom,
             bufferTiles,
+            signal,
             onprogress: (tileStats) =>
               handleProgress({ tiles: { ...tileStats, done: false } }),
           })
@@ -115,6 +117,7 @@ export function download({
 
           const glyphs = downloader.getGlyphs({
             skipLocalGlyphs,
+            signal,
             onprogress: (glyphStats) =>
               handleProgress({ glyphs: { ...glyphStats, done: false } }),
           })

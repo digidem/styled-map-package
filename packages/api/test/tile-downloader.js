@@ -1,4 +1,4 @@
-import { afterAll, assert, beforeAll, describe, test } from 'vitest'
+import { afterAll, assert, beforeAll, describe, test, vi } from 'vitest'
 
 import { createServer as createHTTPServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 import zlib from 'node:zlib'
 
 import { downloadTiles, tileIterator } from '../lib/tile-downloader.js'
+import { FetchQueue } from '../lib/utils/fetch.js'
 import { startSMPServer } from './utils/smp-server.js'
 import { streamToBuffer } from './utils/stream-consumers.js'
 
@@ -356,5 +357,123 @@ describe('downloadTiles without Content-Type header', () => {
       count++
     }
     assert(count > 0, 'at least one tile downloaded')
+  })
+})
+
+describe('downloadTiles cancellation', () => {
+  /** Serves tiles slowly and large enough that an unread body blocks on backpressure. */
+  function startSlowTileServer() {
+    let started = 0
+    let inflight = 0
+    /** @type {Set<import('node:http').ServerResponse>} */
+    const open = new Set()
+    const server = createHTTPServer((req, res) => {
+      started++
+      inflight++
+      open.add(res)
+      res.on('close', () => {
+        inflight--
+        open.delete(res)
+      })
+      res.writeHead(200, {
+        'content-type': 'application/vnd.mapbox-vector-tile',
+      })
+      let chunks = 0
+      const interval = setInterval(() => {
+        if (chunks++ > 16) {
+          clearInterval(interval)
+          res.end()
+          return
+        }
+        res.write(Buffer.alloc(64 * 1024, 1))
+      }, 5)
+      res.on('close', () => clearInterval(interval))
+    })
+    return new Promise((resolve) => {
+      server.listen(0, '127.0.0.1', () => {
+        const { port } = /** @type {import('node:net').AddressInfo} */ (
+          server.address()
+        )
+        resolve({
+          tileUrl: `http://127.0.0.1:${port}/{z}/{x}/{y}.mvt`,
+          get started() {
+            return started
+          },
+          get inflight() {
+            return inflight
+          },
+          close: async () => {
+            for (const res of open) res.destroy()
+            await new Promise((r) => server.close(r))
+          },
+        })
+      })
+    })
+  }
+
+  test('breaking out of the loop frees the shared fetch queue', async () => {
+    const server = await startSlowTileServer()
+    try {
+      // A StyleDownloader shares one queue across tiles, glyphs and sprites, so
+      // a body left unread after cancellation stalls the rest of the download.
+      const fetchQueue = new FetchQueue(2)
+      const tiles = downloadTiles({
+        tileUrls: [server.tileUrl],
+        bounds: /** @type {const} */ ([-180, -85, 180, 85]),
+        maxzoom: 2,
+        fetchQueue,
+      })
+
+      for await (const [stream] of tiles) {
+        await streamToBuffer(stream)
+        break
+      }
+
+      const next = fetchQueue.fetch(server.tileUrl.replace(/\{[zxy]\}/g, '0'))
+      const { body } = await Promise.race([
+        next,
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error('fetch queue is still blocked')),
+            5000,
+          ),
+        ),
+      ])
+      await streamToBuffer(body)
+    } finally {
+      await server.close()
+    }
+  })
+
+  test('aborting the signal stops downloads that have not started', async () => {
+    const server = await startSlowTileServer()
+    try {
+      const ac = new AbortController()
+      const tiles = downloadTiles({
+        tileUrls: [server.tileUrl],
+        bounds: /** @type {const} */ ([-180, -85, 180, 85]),
+        maxzoom: 3, // 85 tiles, far more than the concurrency limit
+        concurrency: 4,
+        signal: ac.signal,
+      })
+
+      for await (const [stream] of tiles) {
+        await streamToBuffer(stream)
+        ac.abort()
+        break
+      }
+
+      const startedAtAbort = server.started
+      await vi.waitFor(() => assert.equal(server.inflight, 0), {
+        timeout: 5000,
+        interval: 50,
+      })
+      assert(
+        server.started <= startedAtAbort + 4,
+        `no queued tiles fetched after abort (started ${server.started}, was ${startedAtAbort})`,
+      )
+    } finally {
+      await server.close()
+    }
   })
 })
