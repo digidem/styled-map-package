@@ -45,7 +45,10 @@ export function writeStreamFromAsync(fn, { concurrency = 16 } = {}) {
       write(chunk) {
         const p = fn(...chunk)
         pending.add(p)
-        p.finally(() => pending.delete(p))
+        // `.then(del, del)` rather than `.finally(del)`: finally forwards the
+        // rejection to a derived promise nobody handles, which crashes Node.
+        const del = () => pending.delete(p)
+        p.then(del, del)
         if (pending.size >= concurrency) {
           return Promise.race(pending)
         }

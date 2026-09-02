@@ -35,10 +35,10 @@ export class FetchQueue {
    * queue will never be emptied.
    *
    * @param {string} url
-   * @param {{ onprogress?: import('./streams.js').ProgressCallback }} opts
+   * @param {{ onprogress?: import('./streams.js').ProgressCallback, signal?: AbortSignal }} opts
    * @returns {Promise<DownloadResponse>}
    */
-  fetch(url, { onprogress } = {}) {
+  fetch(url, { onprogress, signal } = {}) {
     // This is wrapped like this so that pLimit limits concurrent `fetchStream`
     // calls, which only resolve when the body is completely downloaded, but
     // this method will return a response as soon as it is available. NB: If the
@@ -51,6 +51,7 @@ export class FetchQueue {
         onresponse: resolveResponse,
         onerror: rejectResponse,
         onprogress,
+        signal,
       })
     })
   }
@@ -70,11 +71,15 @@ export class FetchQueue {
  * @param {(response: DownloadResponse) => void} opts.onresponse
  * @param {(err: Error) => void} opts.onerror
  * @param {import('./streams.js').ProgressCallback} [opts.onprogress]
+ * @param {AbortSignal} [opts.signal]
  * @returns {Promise<void>}
  */
-async function fetchStream({ url, onresponse, onerror, onprogress }) {
+async function fetchStream({ url, onresponse, onerror, onprogress, signal }) {
   try {
-    const response = await ky(url, { retry: 3 })
+    // p-limit has no cancellation, so queued downloads still run once a slot
+    // frees. Bail before building a request rather than hitting the network.
+    signal?.throwIfAborted()
+    const response = await ky(url, { retry: 3, signal })
     if (!response.body) {
       throw new Error('No body in response')
     }

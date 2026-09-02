@@ -190,9 +190,11 @@ export class StyleDownloader {
    * generator of json and png readable streams, and the sprite id and pixel
    * ratio. Downloads pixel ratios `1` and `2`.
    *
+   * @param {object} [opts]
+   * @param {AbortSignal} [opts.signal] Stop issuing downloads once aborted
    * @returns {AsyncGenerator<{ json: ReadableStream<Uint8Array>, png: ReadableStream<Uint8Array>, id: string, pixelRatio: number }>}
    */
-  async *getSprites() {
+  async *getSprites({ signal } = {}) {
     const style = await this.getStyle()
     if (!style.sprite) return
     const accessToken = this.#mapboxAccessToken
@@ -205,8 +207,8 @@ export class StyleDownloader {
         const jsonUrl = normalizeSpriteURL(url, format, '.json', accessToken)
         const pngUrl = normalizeSpriteURL(url, format, '.png', accessToken)
         const [{ body: json }, { body: png }] = await Promise.all([
-          this.#fetchQueue.fetch(jsonUrl),
-          this.#fetchQueue.fetch(pngUrl),
+          this.#fetchQueue.fetch(jsonUrl, { signal }),
+          this.#fetchQueue.fetch(pngUrl, { signal }),
         ])
         yield { json, png, id, pixelRatio }
       }
@@ -226,9 +228,14 @@ export class StyleDownloader {
    * @param {object} opts
    * @param {(progress: GlyphDownloadStats) => void} [opts.onprogress]
    * @param {boolean} [opts.skipLocalGlyphs] Skip glyph ranges rendered client-side by MapLibre GL via localIdeographFontFamily (CJK, Hangul, Kana, Yi, etc.)
+   * @param {AbortSignal} [opts.signal] Stop issuing downloads once aborted
    * @returns {AsyncGenerator<[ReadableStream<Uint8Array>, GlyphInfo]>}
    */
-  async *getGlyphs({ onprogress = noop, skipLocalGlyphs = false } = {}) {
+  async *getGlyphs({
+    onprogress = noop,
+    skipLocalGlyphs = false,
+    signal,
+  } = {}) {
     const style = await this.getStyle()
     if (!style.glyphs) return
 
@@ -271,7 +278,7 @@ export class StyleDownloader {
           .replace('{fontstack}', fontStack)
           .replace('{range}', range)
         const result = this.#fetchQueue
-          .fetch(url, { onprogress: onDownloadProgress })
+          .fetch(url, { onprogress: onDownloadProgress, signal })
           // TODO: Handle errors downloading glyphs
           .catch(noop)
         queue.enqueue([result, { font, range }])
@@ -282,6 +289,7 @@ export class StyleDownloader {
     if (onprogress) onprogress(stats)
 
     for (const [result, glyphInfo] of queue) {
+      signal?.throwIfAborted()
       // TODO: Handle errors downloading glyphs
       const downloadResponse = await result.catch(noop)
       if (!downloadResponse) continue
@@ -313,6 +321,7 @@ export class StyleDownloader {
    * @param {(progress: TileDownloadStats) => void} [opts.onprogress]
    * @param {number} [opts.bufferTiles=0] Number of extra tile rings to download around the bounds at each zoom level below maxzoom, so the map is not clipped at the edges of the downloaded area when zooming out.
    * @param {boolean} [opts.trackErrors=false] Include errors in the returned array of skipped tiles - this has memory overhead so should only be used for debugging.
+   * @param {AbortSignal} [opts.signal] Stop issuing downloads once aborted
    * @returns {AsyncGenerator<[ReadableStream<Uint8Array>, TileInfo]> & { readonly skipped: Array<TileInfo & { error?: Error }>, readonly stats: TileDownloadStats }}
    */
   getTiles({
@@ -321,6 +330,7 @@ export class StyleDownloader {
     onprogress = noop,
     bufferTiles = 0,
     trackErrors = false,
+    signal,
   }) {
     const _this = this
     /** @type {Array<TileInfo & { error?: Error }>} */
@@ -377,6 +387,7 @@ export class StyleDownloader {
               fetchQueue: _this.#fetchQueue,
               onprogress: onSourceProgress,
               trackErrors,
+              signal,
             })
         for await (const [tileDataStream, tileInfo] of sourceTiles) {
           yield [tileDataStream, { ...tileInfo, sourceId }]

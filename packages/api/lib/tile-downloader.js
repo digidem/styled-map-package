@@ -34,6 +34,7 @@ import { noop } from './utils/misc.js'
  * @param {number} [opts.concurrency=8] Number of concurrent downloads (ignored if `fetchQueue` is provided)
  * @param {FetchQueue} [opts.fetchQueue=new FetchQueue(concurrency)] Optional fetch queue to use for downloading tiles
  * @param {'xyz' | 'tms'} [opts.scheme='xyz'] Tile scheme to use for tile URLs
+ * @param {AbortSignal} [opts.signal] Stop issuing downloads once aborted
  * @returns {AsyncGenerator<[ReadableStream<Uint8Array>, TileInfo]> & { readonly skipped: Array<TileInfo & { error?: Error }>, readonly stats: TileDownloadStats }}
  */
 export function downloadTiles({
@@ -48,6 +49,7 @@ export function downloadTiles({
   concurrency = 8,
   fetchQueue = new FetchQueue(concurrency),
   scheme = 'xyz',
+  signal,
 }) {
   /** @type {Array<TileInfo & { error?: Error }>} */
   const skipped = []
@@ -98,9 +100,12 @@ export function downloadTiles({
       const tileURL = getTileUrl(tileUrls, { x, y, z, scheme })
       const tileInfo = { z, x, y }
       const result = fetchQueue
-        .fetch(tileURL, { onprogress: onDownloadProgress })
+        .fetch(tileURL, { onprogress: onDownloadProgress, signal })
         // We handle error here rather than below to avoid uncaught errors
-        .catch((err) => onDownloadError(err, tileInfo))
+        .catch((err) => {
+          // Once aborted the whole queue rejects; those are not skipped tiles.
+          if (!signal?.aborted) onDownloadError(err, tileInfo)
+        })
       queue.enqueue([result, tileInfo])
     }
 
@@ -108,6 +113,7 @@ export function downloadTiles({
     if (onprogress) onprogress(stats)
 
     for (const [result, tileInfo] of queue) {
+      signal?.throwIfAborted()
       // We handle any error above and add to `skipped`
       const downloadResponse = await result.catch(noop)
       if (!downloadResponse) continue
@@ -128,9 +134,9 @@ export function downloadTiles({
       const transform = /** @type {TransformStream<Uint8Array, Uint8Array>} */ (
         format === 'mvt' ? new CompressionStream('gzip') : new TransformStream()
       )
-      body
-        .pipeTo(transform.writable)
-        .then(onDownloadComplete, (err) => onDownloadError(err, tileInfo))
+      body.pipeTo(transform.writable).then(onDownloadComplete, (err) => {
+        if (!signal?.aborted) onDownloadError(err, tileInfo)
+      })
       stream = transform.readable
 
       yield [stream, { ...tileInfo, format }]

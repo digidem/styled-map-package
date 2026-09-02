@@ -27,7 +27,7 @@ import { Writer } from './writer.js'
  * @param {boolean} [opts.skipLocalGlyphs] Skip glyph ranges rendered client-side by MapLibre GL via localIdeographFontFamily (CJK, Hangul, Kana, Yi, etc.)
  * @param {boolean} [opts.dedupe] When true, duplicate tiles are stored only once (see {@link Writer})
  * @param {number} [opts.bufferTiles=0] Number of extra tile rings to download around `bbox` at each zoom level below maxzoom, so the map is not clipped at the edges of the downloaded area when zooming out. Recorded in the package as `metadata['smp:bufferTiles']`.
- * @param {AbortSignal} [opts.signal] AbortSignal to cancel the download
+ * @param {AbortSignal} [opts.signal] AbortSignal to cancel the download. No further requests are issued once aborted; cancel the returned stream to release downloads already in progress.
  * @returns {import('./types.js').DownloadStream} Readable stream of the output styled map file
  */
 export function download({
@@ -63,6 +63,7 @@ export function download({
 
   /** @param {Partial<DownloadProgress>} update */
   function handleProgress(update) {
+    if (signal.aborted) return
     progress = { ...progress, ...update, elapsedMs: Date.now() - start }
     onprogress?.(progress)
   }
@@ -89,7 +90,7 @@ export function download({
 
       downloadDone = (async () => {
         try {
-          for await (const spriteInfo of downloader.getSprites()) {
+          for await (const spriteInfo of downloader.getSprites({ signal })) {
             await writer.addSprite(spriteInfo)
             handleProgress({
               sprites: {
@@ -104,6 +105,7 @@ export function download({
             bounds: bbox,
             maxzoom,
             bufferTiles,
+            signal,
             onprogress: (tileStats) =>
               handleProgress({ tiles: { ...tileStats, done: false } }),
           })
@@ -115,6 +117,7 @@ export function download({
 
           const glyphs = downloader.getGlyphs({
             skipLocalGlyphs,
+            signal,
             onprogress: (glyphStats) =>
               handleProgress({ glyphs: { ...glyphStats, done: false } }),
           })
@@ -157,8 +160,11 @@ export function download({
     },
     async cancel(reason) {
       pipeAbort.abort(reason)
-      await downloadDone
+      // Release the output before awaiting the download: `addTile` blocks
+      // writing into the zip stream while nobody reads it, which blocks the
+      // tile pipe's abort, which is what `downloadDone` is waiting on.
       await outputReader?.cancel(reason).catch(noop)
+      await downloadDone
     },
   })
 }

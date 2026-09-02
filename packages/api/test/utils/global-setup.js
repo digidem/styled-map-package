@@ -53,9 +53,13 @@ export default async function setup({ provide }) {
   provide('smpServerUrl', `http://127.0.0.1:${address.port}`)
 
   return async () => {
-    await reader.close()
+    // Close the HTTP server before the reader: a response still streaming from
+    // a closed FileSource is never ended, leaving a socket that stops
+    // server.close() from ever calling back.
+    server.closeAllConnections()
     await new Promise((resolve, reject) =>
       server.close((err) => (err ? reject(err) : resolve(undefined))),
     )
+    await reader.close()
   }
 }

@@ -29,10 +29,17 @@ export async function startSMPServer(fixturePath) {
   )
   return {
     baseUrl: `http://localhost:${port}/`,
-    close: () =>
-      new Promise((resolve, reject) => {
-        httpServer.close((err) => (err ? reject(err) : resolve()))
-        reader.close()
-      }),
+    close: async () => {
+      // Destroy sockets before closing the reader: a response still streaming
+      // from a closed FileSource is never ended by @whatwg-node/server, so the
+      // socket leaks and httpServer.close() never calls back.
+      httpServer.closeAllConnections()
+      await /** @type {Promise<void>} */ (
+        new Promise((resolve, reject) =>
+          httpServer.close((err) => (err ? reject(err) : resolve())),
+        )
+      )
+      await reader.close()
+    },
   }
 }
