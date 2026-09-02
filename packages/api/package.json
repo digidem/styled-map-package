@@ -89,7 +89,7 @@
     "zip-writer": "^2.2.0"
   },
   "optionalDependencies": {
-    "better-sqlite3": "^12.8.0"
+    "better-sqlite3": "^12.8.0 || ^13.0.0"
   },
   "devDependencies": {
     "@commander-js/extra-typings": "^15.0.0",
@@ -97,6 +97,7 @@
     "@types/http-errors": "^2.0.4",
     "@types/node": "^22.18.12",
     "@types/readable-stream": "^4.0.24",
+    "@types/semver": "^7.8.0",
     "@vitest/browser": "^4.1.11",
     "@vitest/browser-playwright": "^4.1.11",
     "@vitest/coverage-v8": "^4.1.11",
@@ -105,6 +106,7 @@
     "fast-png": "^8.0.0",
     "pixel-stream": "^1.0.3",
     "playwright": "^1.62.1",
+    "semver": "^7.8.5",
     "sharp": "^0.35.4",
     "tempy": "^3.1.0",
     "type-fest": "^5.9.0",
