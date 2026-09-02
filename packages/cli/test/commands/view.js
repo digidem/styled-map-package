@@ -8,7 +8,9 @@ describe('runView', () => {
 
   function makeDeps(overrides = {}) {
     return {
-      Reader: vi.fn().mockImplementation(() => ({ getStyle: vi.fn() })),
+      Reader: vi.fn().mockImplementation(function () {
+        return { getStyle: vi.fn() }
+      }),
       createServer: vi.fn().mockReturnValue({
         fetch: vi.fn().mockResolvedValue(new Response('tile data')),
       }),

@@ -1,6 +1,6 @@
 import { ZipReader } from '@gmaclennan/zip-reader'
 import { BufferSource } from '@gmaclennan/zip-reader/buffer-source'
-import SphericalMercator from '@mapbox/sphericalmercator'
+import { SphericalMercator } from '@mapbox/sphericalmercator'
 import { bbox as turfBbox } from '@turf/bbox'
 import { describe, expect, test } from 'vitest'
 
@@ -659,7 +659,7 @@ test('Raster tiles write and read', async () => {
       const { randomImageStream } = await import('./utils/image-streams.js')
       return randomImageStream(opts).toBuffer()
     }
-    const { commands } = await import('@vitest/browser/context')
+    const { commands } = await import('vitest/browser')
     // @ts-ignore
     const b64 = await commands.randomImage(opts)
     const binary = atob(b64)

@@ -21,24 +21,24 @@
     "node": ">=22"
   },
   "dependencies": {
-    "styled-map-package-api": "^5.0.0",
-    "smp-noto-glyphs": "^1.0.0",
-    "@inquirer/prompts": "^6.0.1",
-    "@whatwg-node/server": "^0.10.17",
-    "chalk": "^5.4.1",
-    "commander": "^12.1.0",
-    "itty-router": "^5.0.22",
+    "@inquirer/prompts": "^8.7.0",
+    "@whatwg-node/server": "^0.11.0",
+    "chalk": "^6.0.0",
+    "commander": "^15.0.0",
+    "itty-router": "^5.0.24",
     "log-symbols": "^7.0.0",
-    "open": "^10.1.0",
-    "ora": "^8.2.0",
-    "pretty-bytes": "^6.1.1",
-    "pretty-ms": "^9.2.0",
-    "readable-stream": "^4.7.0"
+    "open": "^11.0.2",
+    "ora": "^9.4.1",
+    "pretty-bytes": "^7.1.2",
+    "pretty-ms": "^9.3.1",
+    "readable-stream": "^4.7.0",
+    "smp-noto-glyphs": "^1.0.0",
+    "styled-map-package-api": "^5.0.0"
   },
   "devDependencies": {
-    "execa": "^9.4.0",
+    "execa": "^10.0.1",
     "tempy": "^3.1.0",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.11"
   },
   "repository": {
     "type": "git",

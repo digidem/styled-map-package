@@ -1,4 +1,4 @@
-import SphericalMercator from '@mapbox/sphericalmercator'
+import { SphericalMercator } from '@mapbox/sphericalmercator'
 import { validateStyleMin, migrate } from '@maplibre/maplibre-gl-style-spec'
 import { bbox } from '@turf/bbox'
 import { excludeKeys } from 'filter-obj'

@@ -34,7 +34,7 @@ export async function randomImage(_ctx, { width, height, format }) {
       noise: { type: 'gaussian', mean: 128, sigma: 32 },
     },
   })
-    .toFormat(format)
+    .toFormat(format === 'jpg' ? 'jpeg' : format)
     .toBuffer()
   return buffer.toString('base64')
 }

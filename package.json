@@ -15,15 +15,16 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "^0.6.0",
-    "@changesets/cli": "^2.30.0",
-    "@eslint/js": "^9.25.1",
-    "@trivago/prettier-plugin-sort-imports": "^4.3.0",
-    "eslint": "^9.25.1",
-    "globals": "^16.0.0",
+    "@changesets/changelog-github": "^1.0.0",
+    "@changesets/cli": "^3.0.1",
+    "@eslint/js": "^10.0.1",
+    "@trivago/prettier-plugin-sort-imports": "^6.0.2",
+    "eslint": "^10.9.1",
+    "globals": "^17.12.0",
     "husky": "^9.1.7",
-    "lint-staged": "^15.4.3",
-    "prettier": "^3.5.2"
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.9.6",
+    "vite": "^8.2.2"
   },
   "prettier": {
     "semi": false,

@@ -1,9 +1,9 @@
 /**
- * Browser file I/O helpers. Uses @vitest/browser/context built-in commands
+ * Browser file I/O helpers. Uses vitest/browser built-in commands
  * (readFile, writeFile) and a custom readdir command for directory listings.
  * All commands execute on the Vitest server (Node.js side).
  */
-import { commands } from '@vitest/browser/context'
+import { commands } from 'vitest/browser'
 
 /**
  * Convert a URL object or string to a path suitable for Vitest server commands.

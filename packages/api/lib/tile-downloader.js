@@ -1,4 +1,4 @@
-import SphericalMercator from '@mapbox/sphericalmercator'
+import { SphericalMercator } from '@mapbox/sphericalmercator'
 import Queue from 'yocto-queue'
 
 import { FetchQueue } from './utils/fetch.js'
@@ -126,7 +126,6 @@ export function downloadTiles({
         ;[format, body] = await getTileFormatFromStream(body)
       }
 
-      let stream = body
       // MVT tiles are always gzipped. Unfortunately we can't stop fetch from
       // ungzipping the data during download, so we need to re-gzip it.
       // Use the gzip transform (or a passthrough for other formats) as the pipe
@@ -137,9 +136,8 @@ export function downloadTiles({
       body.pipeTo(transform.writable).then(onDownloadComplete, (err) => {
         if (!signal?.aborted) onDownloadError(err, tileInfo)
       })
-      stream = transform.readable
 
-      yield [stream, { ...tileInfo, format }]
+      yield [transform.readable, { ...tileInfo, format }]
     }
   })()
 

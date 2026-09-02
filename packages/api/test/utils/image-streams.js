@@ -23,5 +23,5 @@ export function randomImageStream({ width, height, format }) {
         sigma: 32,
       },
     },
-  }).toFormat(format)
+  }).toFormat(format === 'jpg' ? 'jpeg' : format)
 }
