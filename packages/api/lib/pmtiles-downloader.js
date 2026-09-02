@@ -4,11 +4,12 @@ import { Compression, PMTiles, TileType } from 'pmtiles'
 import { tileIterator } from './tile-downloader.js'
 import { MAX_BOUNDS } from './utils/geo.js'
 import { noop } from './utils/misc.js'
+import { withDownloadState } from './utils/tile-download-state.js'
 
 /** @import { Header, RangeResponse, Source } from 'pmtiles' */
 /** @import { TileFormat } from './writer.js' */
 /** @import { BBox } from './utils/geo.js' */
-/** @import { TileInfo, TileDownloadStats } from './tile-downloader.js' */
+/** @import { TileInfo, TileDownloadStats, TileDownloadGenerator } from './tile-downloader.js' */
 
 const PMTILES_PROTOCOL = 'pmtiles://'
 
@@ -166,7 +167,7 @@ function singleChunkStream(data) {
  * @param {number} [opts.bufferTiles=0] Number of extra tile rings to download around the bounds at each zoom level below maxzoom, to ensure tiles are not missed at the edges.
  * @param {number} [opts.minzoom=0] Minimum zoom level to download
  * @param {number} [opts.concurrency=8] Number of concurrent tile reads
- * @returns {AsyncGenerator<[ReadableStream<Uint8Array>, TileInfo]> & { readonly skipped: Array<TileInfo & { error?: Error }>, readonly stats: TileDownloadStats }}
+ * @returns {TileDownloadGenerator}
  */
 export function downloadPmtilesTiles({
   pmtiles,
@@ -185,80 +186,80 @@ export function downloadPmtilesTiles({
   /** @type {TileDownloadStats} */
   const stats = { total: 0, downloaded: 0, skipped: 0, totalBytes: 0 }
 
-  /** @type {ReturnType<downloadPmtilesTiles>} */
-  const tiles = (async function* () {
-    const coords = [
-      ...tileIterator({ bounds, minzoom, maxzoom, sourceBounds, bufferTiles }),
-    ]
-    stats.total = coords.length
-    onprogress(stats)
-
-    // Keep a sliding window of in-flight `getZxy` reads. Only `concurrency`
-    // reads are started ahead of the consumer, so a slow consumer applies
-    // backpressure rather than buffering the whole archive in memory.
-    let nextIndex = 0
-    /** @type {Array<{ tileInfo: TileInfo, promise: Promise<RangeResponse | undefined> }>} */
-    const inFlight = []
-    const startNext = () => {
-      if (nextIndex >= coords.length) return
-      const { x, y, z } = coords[nextIndex++]
-      inFlight.push({
-        tileInfo: { z, x, y },
-        promise: pmtiles.getZxy(z, x, y),
-      })
-    }
-    for (let i = 0; i < concurrency; i++) startNext()
-
-    while (inFlight.length > 0) {
-      const { tileInfo, promise } = /** @type {(typeof inFlight)[number]} */ (
-        inFlight.shift()
-      )
-      startNext()
-      /** @type {RangeResponse | undefined} */
-      let response
-      try {
-        response = await promise
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err))
-        skipped.push(trackErrors ? { ...tileInfo, error } : tileInfo)
-        stats.skipped = skipped.length
-        onprogress(stats)
-        continue
-      }
-      if (!response) {
-        // Tile is absent from the archive (normal for sparse tilesets) — drop
-        // it from the total rather than reporting it as a failed download.
-        stats.total--
-        onprogress(stats)
-        continue
-      }
-      const data = new Uint8Array(response.data)
-      stats.downloaded++
-      stats.totalBytes += data.byteLength
+  const tiles = (
+    /** @returns {AsyncGenerator<[ReadableStream<Uint8Array>, TileInfo]>} */
+    async function* () {
+      const coords = [
+        ...tileIterator({
+          bounds,
+          minzoom,
+          maxzoom,
+          sourceBounds,
+          bufferTiles,
+        }),
+      ]
+      stats.total = coords.length
       onprogress(stats)
-      let stream = singleChunkStream(data)
-      if (format === 'mvt') {
-        // SMP stores MVT gzip-compressed; `getZxy` returns it decompressed.
-        stream = stream.pipeThrough(
-          /** @type {TransformStream<Uint8Array, Uint8Array>} */ (
-            new CompressionStream('gzip')
-          ),
-        )
+
+      // Keep a sliding window of in-flight `getZxy` reads. Only `concurrency`
+      // reads are started ahead of the consumer, so a slow consumer applies
+      // backpressure rather than buffering the whole archive in memory.
+      let nextIndex = 0
+      /** @type {Array<{ tileInfo: TileInfo, promise: Promise<RangeResponse | undefined> }>} */
+      const inFlight = []
+      const startNext = () => {
+        if (nextIndex >= coords.length) return
+        const { x, y, z } = coords[nextIndex++]
+        inFlight.push({
+          tileInfo: { z, x, y },
+          promise: pmtiles.getZxy(z, x, y),
+        })
       }
-      yield [stream, { ...tileInfo, format }]
+      for (let i = 0; i < concurrency; i++) startNext()
+
+      while (inFlight.length > 0) {
+        const { tileInfo, promise } = /** @type {(typeof inFlight)[number]} */ (
+          inFlight.shift()
+        )
+        startNext()
+        /** @type {RangeResponse | undefined} */
+        let response
+        try {
+          response = await promise
+        } catch (err) {
+          const error = err instanceof Error ? err : new Error(String(err))
+          skipped.push(trackErrors ? { ...tileInfo, error } : tileInfo)
+          stats.skipped = skipped.length
+          onprogress(stats)
+          continue
+        }
+        if (!response) {
+          // Tile is absent from the archive (normal for sparse tilesets) — drop
+          // it from the total rather than reporting it as a failed download.
+          stats.total--
+          onprogress(stats)
+          continue
+        }
+        const data = new Uint8Array(response.data)
+        stats.downloaded++
+        stats.totalBytes += data.byteLength
+        onprogress(stats)
+        let stream = singleChunkStream(data)
+        if (format === 'mvt') {
+          // SMP stores MVT gzip-compressed; `getZxy` returns it decompressed.
+          stream = stream.pipeThrough(
+            /** @type {TransformStream<Uint8Array, Uint8Array>} */ (
+              new CompressionStream('gzip')
+            ),
+          )
+        }
+        yield [stream, { ...tileInfo, format }]
+      }
     }
-  })()
+  )()
 
-  Object.defineProperty(tiles, 'skipped', {
-    get() {
-      return skipped
-    },
+  return withDownloadState(tiles, {
+    skipped: () => skipped,
+    stats: () => stats,
   })
-  Object.defineProperty(tiles, 'stats', {
-    get() {
-      return stats
-    },
-  })
-
-  return tiles
 }

@@ -19,7 +19,7 @@ export function noop() {}
  * @template {Record<string, unknown>} T
  * @param {T} obj
  * @param {string} key
- * @returns {key is (keyof T)}
+ * @returns {key is (keyof T & string)}
  */
 export function hasOwn(obj, key) {
   return Object.hasOwn(obj, key)
