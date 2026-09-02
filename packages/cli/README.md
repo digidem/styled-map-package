@@ -6,6 +6,8 @@ An `.smp` file is a ZIP archive containing all the resources needed to serve a M
 
 ## Installation
 
+Requires Node.js >= 22.
+
 ```sh
 npm install --global styled-map-package
 ```
@@ -63,8 +65,6 @@ By default the viewer serves empty tiles and Noto Sans glyphs for any resource n
 For packages downloaded with buffer tiles (recorded as `smp:bufferTiles` in the style metadata), the viewer also widens each source's `bounds` so the lower-zoom buffer tiles that extend beyond the data area are rendered rather than clipped. Combined with the empty-tile fallback, panning beyond the downloaded area shows blank tiles instead of console errors.
 
 ### `smp mbtiles`
-
-> **Note:** Requires Node >= 20 (uses `better-sqlite3` which dropped Node 18 support).
 
 Convert an MBTiles file to a `.smp` file.
 

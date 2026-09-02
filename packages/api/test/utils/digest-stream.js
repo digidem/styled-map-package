@@ -1,6 +1,6 @@
 /**
  * A web TransformStream that calculates a SHA-256 digest of the data passing
- * through it. Uses the Web Crypto API so it works in both Node.js 18+ and
+ * through it. Uses the Web Crypto API so it works in both Node.js and
  * browsers. Implements ReadableWritablePair for use with pipeThrough().
  */
 export class DigestStream {
@@ -15,15 +15,7 @@ export class DigestStream {
     this.#digestPromise = new Promise((r) => {
       resolve = r
     })
-    let crypto = globalThis.crypto
     this.#transform = new TransformStream({
-      async start() {
-        // For node 18 support
-        if (!crypto) {
-          // @ts-ignore
-          crypto = (await import('crypto')).webcrypto
-        }
-      },
       /**
        * @param {Uint8Array} chunk
        * @param {TransformStreamDefaultController} controller

@@ -11,8 +11,6 @@ const SOURCE_ID = 'mbtiles-source'
  * ReadableStream. The async MBTiles.open() happens lazily inside the
  * stream's start(), so this function is synchronous.
  *
- * Requires Node >= 20 (uses better-sqlite3 which dropped Node 18 support).
- *
  * @param {string | ArrayBuffer | Uint8Array} source MBTiles source — file path
  *   (Node), OPFS path (browser Worker), or in-memory buffer.
  * @returns {ReadableStream<Uint8Array>}

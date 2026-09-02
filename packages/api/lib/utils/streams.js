@@ -1,14 +1,14 @@
 /**
  * Create a ReadableStream from an async iterable. Uses the native
- * `ReadableStream.from()` when available (Node 20+), otherwise falls back to a
- * manual approach for Node 18 compatibility.
+ * `ReadableStream.from()` when available, otherwise falls back to a manual
+ * approach: Chromium does not implement it.
  *
  * @template T
  * @param {AsyncIterable<T>} iterable
  * @returns {ReadableStream<T>}
  */
 export function readableFromAsync(iterable) {
-  // @ts-ignore - ReadableStream.from() exists in Node 20+ but not in DOM types
+  // @ts-ignore - ReadableStream.from() is missing from the DOM types
   if (typeof ReadableStream.from === 'function') {
     // @ts-ignore
     return ReadableStream.from(iterable)
