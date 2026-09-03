@@ -1,6 +1,6 @@
 {
   "name": "styled-map-package",
-  "version": "6.0.0",
+  "version": "6.0.1",
   "description": "CLI for creating, viewing, and converting Styled Map Package (.smp) files",
   "type": "module",
   "bin": {
@@ -33,7 +33,7 @@
     "pretty-ms": "^9.3.1",
     "readable-stream": "^4.7.0",
     "smp-noto-glyphs": "^2.0.0",
-    "styled-map-package-api": "^6.0.0"
+    "styled-map-package-api": "^6.0.1"
   },
   "devDependencies": {
     "execa": "^10.0.1",
