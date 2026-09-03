@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 import { download } from '../lib/download.js'
 import { Reader } from '../lib/reader.js'
+import { ENOENT } from '../lib/utils/errors.js'
 import { startSMPServer } from './utils/smp-server.js'
 import { streamToBuffer } from './utils/stream-consumers.js'
 
@@ -402,5 +403,81 @@ describe('download cancellation releases resources', () => {
     } finally {
       await server.close()
     }
+  })
+})
+
+describe('download options', () => {
+  /** @type {{ baseUrl: string, close: () => Promise<void> }} */
+  let server
+
+  beforeAll(async () => {
+    const fixturePath = fileURLToPath(
+      new URL('./fixtures/demotiles-z2.smp', import.meta.url),
+    )
+    server = await startSMPServer(fixturePath)
+  })
+
+  afterAll(async () => {
+    if (server) await server.close()
+  })
+
+  test('dedupe option produces a readable SMP', async () => {
+    const smpStream = download({
+      styleUrl: server.baseUrl + 'style.json',
+      bbox: [-180, -85, 180, 85],
+      maxzoom: 0,
+      dedupe: true,
+    })
+    const smp = await streamToBuffer(smpStream)
+    const reader = new Reader(await ZipReader.from(new BufferSource(smp)))
+    const style = await reader.getStyle()
+    const vectorSource = /** @type {any} */ (
+      Object.values(style.sources).find(
+        (/** @type {any} */ s) => s.type === 'vector',
+      )
+    )
+    const tilePath = vectorSource.tiles[0]
+      .replace('smp://maps.v1/', '')
+      .replace('{z}', '0')
+      .replace('{x}', '0')
+      .replace('{y}', '0')
+    const resource = await reader.getResource(tilePath)
+    assert(resource.contentLength > 0, 'tile has content')
+    await streamToBuffer(resource.stream)
+    await reader.close()
+  })
+
+  test('skipLocalGlyphs omits locally-rendered glyph ranges', async () => {
+    // CJK Unified Ideographs: rendered client-side by MapLibre
+    const cjkRange = 'fonts/Open Sans Semibold/19968-20223.pbf.gz'
+    const latinRange = 'fonts/Open Sans Semibold/0-255.pbf.gz'
+    const opts = {
+      styleUrl: server.baseUrl + 'style.json',
+      bbox: /** @type {[number, number, number, number]} */ ([0, 0, 1, 1]),
+      maxzoom: 0,
+    }
+    const [smpAll, smpSkipped] = await Promise.all([
+      streamToBuffer(download(opts)),
+      streamToBuffer(download({ ...opts, skipLocalGlyphs: true })),
+    ])
+    const readerAll = new Reader(await ZipReader.from(new BufferSource(smpAll)))
+    const readerSkipped = new Reader(
+      await ZipReader.from(new BufferSource(smpSkipped)),
+    )
+
+    const cjk = await readerAll.getResource(cjkRange)
+    assert(cjk.contentLength > 0, 'CJK range is downloaded by default')
+    await streamToBuffer(cjk.stream)
+
+    await expect(
+      readerSkipped.getResource(cjkRange),
+      'CJK range is omitted with skipLocalGlyphs',
+    ).rejects.toThrow(ENOENT)
+    const latin = await readerSkipped.getResource(latinRange)
+    assert(latin.contentLength > 0, 'non-local range is still downloaded')
+    await streamToBuffer(latin.stream)
+
+    await readerAll.close()
+    await readerSkipped.close()
   })
 })
