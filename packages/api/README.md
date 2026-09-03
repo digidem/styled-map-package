@@ -6,6 +6,8 @@ An `.smp` file is a ZIP archive containing all the resources needed to serve a M
 
 ## Installation
 
+Requires Node.js >= 22 (or a modern browser).
+
 ```sh
 npm install styled-map-package-api
 ```
@@ -196,7 +198,7 @@ The `onprogress` callback receives a `DownloadProgress` object:
 
 ### Converting from MBTiles
 
-> **Note:** MBTiles conversion requires Node >= 20 (uses `better-sqlite3` which dropped Node 18 support). Only raster MBTiles are currently supported — vector MBTiles will throw an error.
+> **Note:** Only raster MBTiles are currently supported — vector MBTiles will throw an error.
 
 ```js
 import { fromMBTiles } from 'styled-map-package-api/from-mbtiles'

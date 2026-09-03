@@ -32,17 +32,13 @@ describe('help output', () => {
     expect(stdout).toMatchSnapshot()
   })
 
-  // mbtiles-reader requires better-sqlite3 which needs Node >= 20
-  test.skipIf(parseInt(process.versions.node) < 20)(
-    'smp mbtiles --help',
-    async () => {
-      const { stdout } = await execFileAsync('node', [
-        path.join(BIN_DIR, 'smp-mbtiles.js'),
-        '--help',
-      ])
-      expect(stdout).toMatchSnapshot()
-    },
-  )
+  test('smp mbtiles --help', async () => {
+    const { stdout } = await execFileAsync('node', [
+      path.join(BIN_DIR, 'smp-mbtiles.js'),
+      '--help',
+    ])
+    expect(stdout).toMatchSnapshot()
+  })
 })
 
 describe('error output', () => {

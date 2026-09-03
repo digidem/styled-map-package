@@ -30,15 +30,9 @@ const updateSnapshots =
  * @returns {ReadableStream<Uint8Array>}
  */
 function randomWebStream({ size }) {
-  /** @type {any} */
-  let crypto = globalThis.crypto
   return new ReadableStream({
-    async start(controller) {
+    start(controller) {
       const bytes = new Uint8Array(size)
-      // For node 18 support
-      if (!crypto) {
-        crypto = (await import('crypto')).webcrypto
-      }
       crypto.getRandomValues(bytes)
       controller.enqueue(bytes)
       controller.close()
@@ -47,32 +41,11 @@ function randomWebStream({ size }) {
 }
 
 /**
- * Fill a Uint8Array with random bytes. Works in Node 18+ and browsers.
- * @param {Uint8Array} bytes
- * @returns {Promise<Uint8Array>}
- */
-async function randomBytes(bytes) {
-  /** @type {any} */
-  let c = globalThis.crypto
-  if (!c) {
-    c = (await import('crypto')).webcrypto
-  }
-  c.getRandomValues(bytes)
-  return bytes
-}
-
-/**
  * Compute SHA-256 hex digest of a Uint8Array.
  * @param {Uint8Array} data
  * @returns {Promise<string>}
  */
 async function sha256hex(data) {
-  /** @type {any} */
-  let crypto = globalThis.crypto
-  // For node 18 support
-  if (!crypto) {
-    crypto = (await import('crypto')).webcrypto
-  }
   // @ts-ignore - Uint8Array is a valid BufferSource despite TS type mismatch with ArrayBufferLike
   const buf = await crypto.subtle.digest('SHA-256', data)
   return Array.from(new Uint8Array(buf))
@@ -909,10 +882,10 @@ test('Dedupe: duplicate tiles are stored once and read back correctly', async ()
 
   const sourceId = 'maplibre'
   // Create a shared tile buffer to use as duplicate content
-  const sharedTileData = await randomBytes(new Uint8Array(1024))
+  const sharedTileData = crypto.getRandomValues(new Uint8Array(1024))
   const sharedTileHash = await sha256hex(sharedTileData)
 
-  const uniqueTileData = await randomBytes(new Uint8Array(2048))
+  const uniqueTileData = crypto.getRandomValues(new Uint8Array(2048))
   const uniqueTileHash = await sha256hex(uniqueTileData)
 
   const tiles = [
@@ -1037,7 +1010,7 @@ test('Dedupe: no duplicates produces same result as non-dedupe', async () => {
     { x: 0, y: 0, z: 1 },
     { x: 1, y: 0, z: 1 },
   ]) {
-    const data = await randomBytes(new Uint8Array(random(1024, 2048)))
+    const data = crypto.getRandomValues(new Uint8Array(random(1024, 2048)))
     tileHashes.set(`${z}/${x}/${y}`, await sha256hex(data))
     await writer.addTile(data, { x, y, z, sourceId, format: 'mvt' })
   }

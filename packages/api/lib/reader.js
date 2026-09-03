@@ -12,7 +12,8 @@ import {
 } from './utils/templates.js'
 
 /**
- * Simple deferred promise helper (Node 20 lacks Promise.withResolvers).
+ * Simple deferred promise helper. Not `Promise.withResolvers()`, which is too
+ * new for the browsers this package still supports.
  * @template T
  * @returns {{ promise: Promise<T>, resolve: (value: T) => void, reject: (reason: unknown) => void }}
  */

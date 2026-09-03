@@ -17,6 +17,9 @@
   },
   "keywords": [],
   "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
     "styled-map-package-api": "^5.0.0",
     "smp-noto-glyphs": "^1.0.0",

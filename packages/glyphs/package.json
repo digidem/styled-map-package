@@ -24,7 +24,7 @@
     "types": "tsc"
   },
   "devDependencies": {
-    "@types/node": "^18.19.130",
+    "@types/node": "^22.18.12",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   },
@@ -38,6 +38,9 @@
     "fallback"
   ],
   "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/digidem/styled-map-package.git",
