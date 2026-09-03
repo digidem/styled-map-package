@@ -40,21 +40,30 @@ export function readableFromAsync(iterable) {
  */
 export function writeStreamFromAsync(fn, { concurrency = 16 } = {}) {
   const pending = new Set()
+  /** @type {{ reason: unknown } | undefined} */
+  let failure
   return new WritableStream(
     {
       write(chunk) {
+        if (failure) return Promise.reject(failure.reason)
         const p = fn(...chunk)
         pending.add(p)
-        // `.then(del, del)` rather than `.finally(del)`: finally forwards the
-        // rejection to a derived promise nobody handles, which crashes Node.
+        // A rejected promise is removed from `pending` as soon as it settles,
+        // so the failure must be remembered here or `close()` never sees it.
+        // `.then(del, onError)` rather than `.finally(del)`: finally forwards
+        // the rejection to a derived promise nobody handles, which crashes Node.
         const del = () => pending.delete(p)
-        p.then(del, del)
+        p.then(del, (reason) => {
+          failure ??= { reason }
+          del()
+        })
         if (pending.size >= concurrency) {
           return Promise.race(pending)
         }
       },
       async close() {
         await Promise.all(pending)
+        if (failure) throw failure.reason
       },
     },
     new CountQueuingStrategy({ highWaterMark: concurrency }),
