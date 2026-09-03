@@ -25,6 +25,7 @@ import {
   mapFontStacks,
   validateStyle,
 } from './utils/style.js'
+import { withDownloadState } from './utils/tile-download-state.js'
 
 /** @import { SourceSpecification, StyleSpecification } from '@maplibre/maplibre-gl-style-spec' */
 /** @import { TileInfo, GlyphInfo, GlyphRange } from './writer.js' */
@@ -322,7 +323,7 @@ export class StyleDownloader {
    * @param {number} [opts.bufferTiles=0] Number of extra tile rings to download around the bounds at each zoom level below maxzoom, so the map is not clipped at the edges of the downloaded area when zooming out.
    * @param {boolean} [opts.trackErrors=false] Include errors in the returned array of skipped tiles - this has memory overhead so should only be used for debugging.
    * @param {AbortSignal} [opts.signal] Stop issuing downloads once aborted
-   * @returns {AsyncGenerator<[ReadableStream<Uint8Array>, TileInfo]> & { readonly skipped: Array<TileInfo & { error?: Error }>, readonly stats: TileDownloadStats }}
+   * @returns {import('./tile-downloader.js').TileDownloadGenerator<TileInfo>}
    */
   getTiles({
     bounds,
@@ -343,75 +344,68 @@ export class StyleDownloader {
       totalBytes: 0,
     }
 
-    /** @type {ReturnType<StyleDownloader['getTiles']>} */
-    const tiles = (async function* () {
-      const inlinedStyle = await _this.getStyle()
-      for await (const [sourceId, source] of Object.entries(
-        inlinedStyle.sources,
-      )) {
-        if (source.type !== 'raster' && source.type !== 'vector') {
-          continue
+    const tiles = (
+      /** @returns {AsyncGenerator<[ReadableStream<Uint8Array>, TileInfo]>} */
+      async function* () {
+        const inlinedStyle = await _this.getStyle()
+        for await (const [sourceId, source] of Object.entries(
+          inlinedStyle.sources,
+        )) {
+          if (source.type !== 'raster' && source.type !== 'vector') {
+            continue
+          }
+          // Baseline stats for this source, used in the `onprogress` closure
+          // below. Sorry for the hard-to-follow code! `onprogress` can be called
+          // after we are already reading the next source, hence the need for a
+          // closure.
+          const statsBaseline = { ...stats }
+          /** @param {TileDownloadStats} sourceStats */
+          const onSourceProgress = (sourceStats) => {
+            stats = addStats(statsBaseline, sourceStats)
+            onprogress(stats)
+          }
+          const pmtilesHandle = _this.#pmtilesSources.get(sourceId)
+          const sourceTiles = pmtilesHandle
+            ? downloadPmtilesTiles({
+                pmtiles: pmtilesHandle.pmtiles,
+                format: pmtilesHandle.format,
+                bounds,
+                maxzoom: Math.min(maxzoom, source.maxzoom || maxzoom),
+                minzoom: source.minzoom,
+                sourceBounds: source.bounds,
+                bufferTiles,
+                concurrency: _this.#concurrency,
+                onprogress: onSourceProgress,
+                trackErrors,
+              })
+            : downloadTiles({
+                tileUrls: source.tiles,
+                bounds,
+                maxzoom: Math.min(maxzoom, source.maxzoom || maxzoom),
+                minzoom: source.minzoom,
+                sourceBounds: source.bounds,
+                bufferTiles,
+                scheme: source.scheme,
+                fetchQueue: _this.#fetchQueue,
+                onprogress: onSourceProgress,
+                trackErrors,
+                signal,
+              })
+          for await (const [tileDataStream, tileInfo] of sourceTiles) {
+            yield [tileDataStream, { ...tileInfo, sourceId }]
+          }
+          Array.prototype.push.apply(
+            skipped,
+            sourceTiles.skipped.map((tile) => ({ ...tile, sourceId })),
+          )
         }
-        // Baseline stats for this source, used in the `onprogress` closure
-        // below. Sorry for the hard-to-follow code! `onprogress` can be called
-        // after we are already reading the next source, hence the need for a
-        // closure.
-        const statsBaseline = { ...stats }
-        /** @param {TileDownloadStats} sourceStats */
-        const onSourceProgress = (sourceStats) => {
-          stats = addStats(statsBaseline, sourceStats)
-          onprogress(stats)
-        }
-        const pmtilesHandle = _this.#pmtilesSources.get(sourceId)
-        const sourceTiles = pmtilesHandle
-          ? downloadPmtilesTiles({
-              pmtiles: pmtilesHandle.pmtiles,
-              format: pmtilesHandle.format,
-              bounds,
-              maxzoom: Math.min(maxzoom, source.maxzoom || maxzoom),
-              minzoom: source.minzoom,
-              sourceBounds: source.bounds,
-              bufferTiles,
-              concurrency: _this.#concurrency,
-              onprogress: onSourceProgress,
-              trackErrors,
-            })
-          : downloadTiles({
-              tileUrls: source.tiles,
-              bounds,
-              maxzoom: Math.min(maxzoom, source.maxzoom || maxzoom),
-              minzoom: source.minzoom,
-              sourceBounds: source.bounds,
-              bufferTiles,
-              scheme: source.scheme,
-              fetchQueue: _this.#fetchQueue,
-              onprogress: onSourceProgress,
-              trackErrors,
-              signal,
-            })
-        for await (const [tileDataStream, tileInfo] of sourceTiles) {
-          yield [tileDataStream, { ...tileInfo, sourceId }]
-        }
-        Array.prototype.push.apply(
-          skipped,
-          sourceTiles.skipped.map((tile) => ({ ...tile, sourceId })),
-        )
       }
-    })()
+    )()
 
-    Object.defineProperty(tiles, 'skipped', {
-      get() {
-        return skipped
-      },
+    return withDownloadState(tiles, {
+      skipped: () => skipped,
+      stats: () => stats,
     })
-
-    Object.defineProperty(tiles, 'stats', {
-      get() {
-        return stats
-      },
-    })
-
-    return tiles
   }
 }
 
