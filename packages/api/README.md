@@ -203,8 +203,7 @@ The `onprogress` callback receives a `DownloadProgress` object:
 In Node, MBTiles reading goes through `mbtiles-reader`, which uses the native
 `better-sqlite3`. It is declared here as an optional dependency accepting either
 v12 or v13, so this package does not conflict with whichever major the rest of
-your dependency tree has settled on. Note that `mbtiles-reader` itself currently
-asks for v12, so a tree pinned to v13 still ends up with both installed.
+your dependency tree has settled on.
 
 ```js
 import { fromMBTiles } from 'styled-map-package-api/from-mbtiles'
