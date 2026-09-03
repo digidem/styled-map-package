@@ -24,15 +24,14 @@ Arguments:
   styleUrl                            URL to style to download
 
 Options:
-  -o, --output <file>                 output file (if omitted, writes to
-                                      stdout)
+  -o, --output <file>                 output file (if omitted, writes to stdout)
   -b, --bbox <west,south,east,north>  bounding box of area to download e.g.
                                       11,47,12,47.5
   -z, --zoom <number>                 max zoom level to download
   -t, --token <token>                 Mapbox access token (necessary for Mapbox
                                       styles)
-  --skip-local-glyphs                 Skip CJK/Hangul/Kana glyph ranges
-                                      rendered locally by MapLibre GL
+  --skip-local-glyphs                 Skip CJK/Hangul/Kana glyph ranges rendered
+                                      locally by MapLibre GL
   -d, --dedupe                        deduplicate tiles with identical content
                                       to reduce file size
   --buffer-tiles                      download an extra tile ring around the

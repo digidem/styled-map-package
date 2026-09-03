@@ -1,5 +1,5 @@
 import { ZipReader } from '@gmaclennan/zip-reader'
-import SphericalMercator from '@mapbox/sphericalmercator'
+import { SphericalMercator } from '@mapbox/sphericalmercator'
 import { expressions, validateStyleMin } from '@maplibre/maplibre-gl-style-spec'
 
 import { isLocallyRenderedRange } from './utils/style.js'

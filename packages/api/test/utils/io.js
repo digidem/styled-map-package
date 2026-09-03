@@ -1,6 +1,6 @@
 /**
  * Node.js file I/O helpers. In the browser project these are replaced via
- * vitest config alias with io.browser.js, which uses @vitest/browser/context.
+ * vitest config alias with io.browser.js, which uses vitest/browser.
  */
 import fs from 'node:fs/promises'
 

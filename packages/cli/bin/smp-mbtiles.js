@@ -14,13 +14,16 @@ program
   .option('-o, --output <file>', 'output smp file')
   .argument('<mbtiles>', 'MBTiles file to convert')
   .action(async (mbtilesPath, { output }) => {
-    await runMbtiles({ mbtilesPath, output }, {
-      fromMBTiles,
-      createOutputStream: (output) =>
-        output
-          ? Writable.toWeb(fs.createWriteStream(output))
-          : Writable.toWeb(process.stdout),
-    })
+    await runMbtiles(
+      { mbtilesPath, output },
+      {
+        fromMBTiles,
+        createOutputStream: (output) =>
+          output
+            ? Writable.toWeb(fs.createWriteStream(output))
+            : Writable.toWeb(process.stdout),
+      },
+    )
   })
 
 program.parseAsync(process.argv)

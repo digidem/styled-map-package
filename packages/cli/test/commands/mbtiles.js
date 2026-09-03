@@ -33,11 +33,13 @@ describe('runMbtiles', () => {
 
   test('passes undefined output when not specified', async () => {
     const fromMBTiles = vi.fn().mockReturnValue(
-      new ReadableStream({ start(c) { c.close() } }),
+      new ReadableStream({
+        start(c) {
+          c.close()
+        },
+      }),
     )
-    const createOutputStream = vi
-      .fn()
-      .mockReturnValue(new WritableStream())
+    const createOutputStream = vi.fn().mockReturnValue(new WritableStream())
 
     await runMbtiles(
       { mbtilesPath: 'input.mbtiles', output: undefined },

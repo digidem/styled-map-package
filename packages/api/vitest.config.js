@@ -1,3 +1,4 @@
+import { playwright } from '@vitest/browser-playwright'
 import { defineConfig } from 'vitest/config'
 
 import { fileURLToPath } from 'node:url'
@@ -5,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 /** Files that are helpers/utilities, not test suites */
 const nonTestFiles = ['test/utils/**/*.js', 'test/*-worker.js']
 
-/** @type {import('vitest/dist/node.js').BrowserInstanceOption[]} */
+/** @type {import('vitest/node').BrowserInstanceOption[]} */
 const browserInstances = [{ browser: 'chromium' }]
 
 if (process.platform === 'darwin') {
@@ -64,7 +65,7 @@ export default defineConfig({
           browser: {
             enabled: true,
             headless: true,
-            provider: 'playwright',
+            provider: playwright(),
             screenshotFailures: false,
             instances: browserInstances,
             commands: {
