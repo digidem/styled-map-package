@@ -1,5 +1,22 @@
 # smp-noto-glyphs
 
+## 2.0.0
+
+### Major Changes
+
+- [#116](https://github.com/digidem/styled-map-package/pull/116) [`afe8531`](https://github.com/digidem/styled-map-package/commit/afe8531fb721853875f96e9daadf44470de0790c) Thanks [@gmaclennan](https://github.com/gmaclennan)! - Drop support for Node 18 and Node 20, both of which are past end of life. All
+  packages now declare `"engines": { "node": ">=22" }` and are tested against Node
+  22 and 24 only.
+
+### Patch Changes
+
+- [#119](https://github.com/digidem/styled-map-package/pull/119) [`e44d64b`](https://github.com/digidem/styled-map-package/commit/e44d64b602c64aa72085f88eda27976202b774b4) Thanks [@gmaclennan](https://github.com/gmaclennan)! - Build with TypeScript 7. The emitted declarations are unchanged apart from
+  formatting, so there is no change to the public type surface.
+
+- [#117](https://github.com/digidem/styled-map-package/pull/117) [`e4920e8`](https://github.com/digidem/styled-map-package/commit/e4920e82cd664dd08dc5d26c73785595ce6c3f51) Thanks [@gmaclennan](https://github.com/gmaclennan)! - Update dependencies now that Node 18 and 20 are no longer supported. Notably
+  Vitest 4, Vite 8, ESLint 10, `@maplibre/maplibre-gl-style-spec` 26, `ky` 2,
+  `commander` 15, `@inquirer/prompts` 8 and `@mapbox/sphericalmercator` 2.
+
 ## 1.0.0
 
 ### Major Changes
