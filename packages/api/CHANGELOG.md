@@ -1,5 +1,34 @@
 # styled-map-package-api
 
+## 6.0.0
+
+### Major Changes
+
+- [#116](https://github.com/digidem/styled-map-package/pull/116) [`afe8531`](https://github.com/digidem/styled-map-package/commit/afe8531fb721853875f96e9daadf44470de0790c) Thanks [@gmaclennan](https://github.com/gmaclennan)! - Drop support for Node 18 and Node 20, both of which are past end of life. All
+  packages now declare `"engines": { "node": ">=22" }` and are tested against Node
+  22 and 24 only.
+
+### Patch Changes
+
+- [#114](https://github.com/digidem/styled-map-package/pull/114) [`00b4d19`](https://github.com/digidem/styled-map-package/commit/00b4d191a76dc016d244e3171da760cccf706df4) Thanks [@gmaclennan](https://github.com/gmaclennan)! - Cancelling a download now stops it fetching. The `signal` passed to
+  `download()` previously only stopped the pipe, so an aborted download carried
+  on fetching every remaining tile and glyph, `onprogress` kept firing with every
+  pending tile counted as skipped, and `await stream.cancel()` could hang forever
+  when the output was not being read. `downloadTiles`, `StyleDownloader#getTiles`,
+  `#getGlyphs` and `#getSprites` accept an optional `signal`.
+
+  Also fixes a mid-download network error surfacing as an unhandled rejection
+  (which terminates the process) rather than erroring the output stream.
+
+- [#120](https://github.com/digidem/styled-map-package/pull/120) [`c8b9c21`](https://github.com/digidem/styled-map-package/commit/c8b9c212ab8162223370f9e20d2d34518754e5cb) Thanks [@gmaclennan](https://github.com/gmaclennan)! - Accept either better-sqlite3 v12 or v13 as the optional dependency.
+
+- [#119](https://github.com/digidem/styled-map-package/pull/119) [`e44d64b`](https://github.com/digidem/styled-map-package/commit/e44d64b602c64aa72085f88eda27976202b774b4) Thanks [@gmaclennan](https://github.com/gmaclennan)! - Build with TypeScript 7. The emitted declarations are unchanged apart from
+  formatting, so there is no change to the public type surface.
+
+- [#117](https://github.com/digidem/styled-map-package/pull/117) [`e4920e8`](https://github.com/digidem/styled-map-package/commit/e4920e82cd664dd08dc5d26c73785595ce6c3f51) Thanks [@gmaclennan](https://github.com/gmaclennan)! - Update dependencies now that Node 18 and 20 are no longer supported. Notably
+  Vitest 4, Vite 8, ESLint 10, `@maplibre/maplibre-gl-style-spec` 26, `ky` 2,
+  `commander` 15, `@inquirer/prompts` 8 and `@mapbox/sphericalmercator` 2.
+
 ## 5.0.0
 
 ### Major Changes
