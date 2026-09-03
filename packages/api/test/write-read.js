@@ -41,16 +41,6 @@ function randomWebStream({ size }) {
 }
 
 /**
- * Fill a Uint8Array with random bytes.
- * @param {Uint8Array} bytes
- * @returns {Uint8Array}
- */
-function randomBytes(bytes) {
-  crypto.getRandomValues(bytes)
-  return bytes
-}
-
-/**
  * Compute SHA-256 hex digest of a Uint8Array.
  * @param {Uint8Array} data
  * @returns {Promise<string>}
@@ -892,10 +882,10 @@ test('Dedupe: duplicate tiles are stored once and read back correctly', async ()
 
   const sourceId = 'maplibre'
   // Create a shared tile buffer to use as duplicate content
-  const sharedTileData = randomBytes(new Uint8Array(1024))
+  const sharedTileData = crypto.getRandomValues(new Uint8Array(1024))
   const sharedTileHash = await sha256hex(sharedTileData)
 
-  const uniqueTileData = randomBytes(new Uint8Array(2048))
+  const uniqueTileData = crypto.getRandomValues(new Uint8Array(2048))
   const uniqueTileHash = await sha256hex(uniqueTileData)
 
   const tiles = [
@@ -1020,7 +1010,7 @@ test('Dedupe: no duplicates produces same result as non-dedupe', async () => {
     { x: 0, y: 0, z: 1 },
     { x: 1, y: 0, z: 1 },
   ]) {
-    const data = randomBytes(new Uint8Array(random(1024, 2048)))
+    const data = crypto.getRandomValues(new Uint8Array(random(1024, 2048)))
     tileHashes.set(`${z}/${x}/${y}`, await sha256hex(data))
     await writer.addTile(data, { x, y, z, sourceId, format: 'mvt' })
   }
