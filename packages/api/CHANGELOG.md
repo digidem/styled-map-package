@@ -1,5 +1,13 @@
 # styled-map-package-api
 
+## 6.0.1
+
+### Patch Changes
+
+- [#122](https://github.com/digidem/styled-map-package/pull/122) [`a8252f3`](https://github.com/digidem/styled-map-package/commit/a8252f3d620839f850ac21055aa79421dae32de5) Thanks [@gmaclennan](https://github.com/gmaclennan)! - Add test coverage for the empty tile and glyph fallbacks, tile and glyph write streams, `Writer.abort()`, the `dedupe` and `skipLocalGlyphs` download options, and error handling for corrupt MBTiles input.
+
+- [#121](https://github.com/digidem/styled-map-package/pull/121) [`c628935`](https://github.com/digidem/styled-map-package/commit/c628935ebe1fd200d4c4eb61fd7e4ccf2ed7eae2) Thanks [@gmaclennan](https://github.com/gmaclennan)! - Fix `createTileWriteStream()` and `createGlyphWriteStream()` silently dropping errors thrown by `addTile()` / `addGlyphs()` when the error settled before the stream was closed.
+
 ## 6.0.0
 
 ### Major Changes
