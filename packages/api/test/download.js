@@ -1,13 +1,25 @@
 import { ZipReader } from '@gmaclennan/zip-reader'
 import { BufferSource } from '@gmaclennan/zip-reader/buffer-source'
-import { afterAll, assert, beforeAll, describe, expect, test, vi } from 'vitest'
+import {
+  afterAll,
+  assert,
+  beforeAll,
+  describe,
+  expect,
+  onTestFinished,
+  test,
+  vi,
+} from 'vitest'
 
 import { createServer as createHTTPServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
+import { gzipSync } from 'node:zlib'
 
 import { download } from '../lib/download.js'
 import { Reader } from '../lib/reader.js'
 import { ENOENT } from '../lib/utils/errors.js'
+import { validate } from '../lib/validator.js'
+import { encodeTile } from './utils/mvt-encode.js'
 import { startSMPServer } from './utils/smp-server.js'
 import { streamToBuffer } from './utils/stream-consumers.js'
 
@@ -457,8 +469,10 @@ describe('download options', () => {
       maxzoom: 0,
     }
     const [smpAll, smpSkipped] = await Promise.all([
-      streamToBuffer(download(opts)),
-      streamToBuffer(download({ ...opts, skipLocalGlyphs: true })),
+      streamToBuffer(download({ ...opts, allGlyphRanges: true })),
+      streamToBuffer(
+        download({ ...opts, allGlyphRanges: true, skipLocalGlyphs: true }),
+      ),
     ])
     const readerAll = new Reader(await ZipReader.from(new BufferSource(smpAll)))
     const readerSkipped = new Reader(
@@ -466,7 +480,7 @@ describe('download options', () => {
     )
 
     const cjk = await readerAll.getResource(cjkRange)
-    assert(cjk.contentLength > 0, 'CJK range is downloaded by default')
+    assert(cjk.contentLength > 0, 'CJK range is downloaded')
     await streamToBuffer(cjk.stream)
 
     await expect(
@@ -479,5 +493,226 @@ describe('download options', () => {
 
     await readerAll.close()
     await readerSkipped.close()
+  })
+})
+
+describe('download glyph ranges', () => {
+  /** @type {{ baseUrl: string, close: () => Promise<void> }} */
+  let server
+
+  beforeAll(async () => {
+    const fixturePath = fileURLToPath(
+      new URL('./fixtures/demotiles-z2.smp', import.meta.url),
+    )
+    server = await startSMPServer(fixturePath)
+  })
+
+  afterAll(async () => {
+    if (server) await server.close()
+  })
+
+  /**
+   * @param {Partial<Parameters<typeof download>[0]>} opts
+   */
+  async function downloadGlyphs(opts) {
+    /** @type {import('../lib/download.js').DownloadProgress | undefined} */
+    let progress
+    const smp = await streamToBuffer(
+      download({
+        styleUrl: server.baseUrl + 'style.json',
+        bbox: [-180, -85, 180, 85],
+        maxzoom: 1,
+        onprogress: (p) => (progress = p),
+        ...opts,
+      }),
+    )
+    const zip = await ZipReader.from(new BufferSource(smp))
+    const fonts = []
+    for await (const entry of zip) {
+      if (entry.name.startsWith('fonts/')) fonts.push(entry.name)
+    }
+    const validation = await validate(zip)
+    const style = await new Reader(zip).getStyle()
+    return {
+      fonts,
+      glyphsRequested: progress?.glyphs.total,
+      validation,
+      glyphRangesMetadata: style.metadata['smp:glyphRanges'],
+    }
+  }
+
+  test('only downloads glyph ranges used by labels', async () => {
+    const { fonts, glyphsRequested, validation, glyphRangesMetadata } =
+      await downloadGlyphs({ skipLocalGlyphs: true })
+    assert.equal(glyphRangesMetadata, 'used')
+    // Labels are Latin-1 with `text-transform`, which adds 256-511 and
+    // 768-1023. A garbled "CuraÃ§ao" contains "§", which can be set upright in
+    // vertical text, so vertical punctuation ranges are needed too.
+    assert.deepEqual(fonts, [
+      'fonts/Open Sans Semibold/0-255.pbf.gz',
+      'fonts/Open Sans Semibold/256-511.pbf.gz',
+      'fonts/Open Sans Semibold/768-1023.pbf.gz',
+      'fonts/Open Sans Semibold/8192-8447.pbf.gz',
+      'fonts/Open Sans Semibold/65024-65279.pbf.gz',
+    ])
+    assert.equal(glyphsRequested, 5)
+    assert.deepEqual(
+      validation.issues.filter((i) => i.type === 'incomplete_font_glyphs'),
+      [],
+      'validator agrees the needed ranges are present',
+    )
+  })
+
+  test('allGlyphRanges downloads every range', async () => {
+    const { fonts, glyphsRequested, glyphRangesMetadata } =
+      await downloadGlyphs({ allGlyphRanges: true })
+    assert.equal(glyphRangesMetadata, undefined)
+    assert.equal(glyphsRequested, 256)
+    assert(fonts.length > 1, 'more than one range stored')
+    assert.include(fonts, 'fonts/Open Sans Semibold/0-255.pbf.gz')
+  })
+})
+
+describe('download glyph ranges from served tiles', () => {
+  /**
+   * Serve a labelled style whose tiles are sent in two chunks, and record the
+   * glyph ranges that are requested.
+   *
+   * @param {Uint8Array} tile
+   * @param {{ glyphs?: boolean }} [opts]
+   */
+  async function startLabelServer(tile, { glyphs = true } = {}) {
+    /** @type {string[]} */
+    const glyphRequests = []
+    /** @type {number} */
+    let port
+    const server = createHTTPServer((req, res) => {
+      const url = req.url ?? ''
+      if (url === '/style.json') {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(
+          JSON.stringify({
+            version: 8,
+            ...(glyphs && {
+              glyphs: `http://127.0.0.1:${port}/fonts/{fontstack}/{range}.pbf`,
+            }),
+            sources: {
+              t: {
+                type: 'vector',
+                tiles: [`http://127.0.0.1:${port}/tiles/{z}/{x}/{y}.mvt`],
+                maxzoom: 1,
+              },
+            },
+            layers: glyphs
+              ? [
+                  {
+                    id: 'labels',
+                    type: 'symbol',
+                    source: 't',
+                    'source-layer': 'place',
+                    layout: {
+                      'text-field': ['get', 'name'],
+                      'text-font': ['Test Font'],
+                    },
+                  },
+                ]
+              : [],
+          }),
+        )
+      } else if (url.startsWith('/fonts/')) {
+        glyphRequests.push(url.split('/')[3].replace('.pbf', ''))
+        res.writeHead(200, { 'content-type': 'application/x-protobuf' })
+        res.end(Buffer.alloc(8))
+      } else {
+        res.writeHead(200, {
+          'content-type': 'application/vnd.mapbox-vector-tile',
+        })
+        const middle = Math.floor(tile.length / 2)
+        res.write(tile.subarray(0, middle))
+        setTimeout(() => res.end(tile.subarray(middle)), 5)
+      }
+    })
+    await new Promise((resolve) =>
+      server.listen(0, '127.0.0.1', () => resolve(undefined)),
+    )
+    port = /** @type {import('node:net').AddressInfo} */ (server.address()).port
+    return {
+      styleUrl: `http://127.0.0.1:${port}/style.json`,
+      glyphRequests,
+      close: async () => {
+        server.closeAllConnections()
+        await new Promise((resolve) => server.close(resolve))
+      },
+    }
+  }
+
+  /** @param {ReadableStream<Uint8Array>} stream */
+  async function readGlyphRangesMetadata(stream) {
+    const zip = await ZipReader.from(
+      new BufferSource(await streamToBuffer(stream)),
+    )
+    const style = await new Reader(zip).getStyle()
+    return style.metadata['smp:glyphRanges']
+  }
+
+  const greekTile = encodeTile([
+    { name: 'place', features: [{ name: 'Αθήνα', other: 'Москва' }] },
+  ])
+
+  for (const dedupe of [false, true]) {
+    test(`requests ranges found in tiles (dedupe: ${dedupe})`, async () => {
+      const server = await startLabelServer(greekTile)
+      onTestFinished(server.close)
+      const glyphRanges = await readGlyphRangesMetadata(
+        download({
+          styleUrl: server.styleUrl,
+          bbox: [-180, -85, 180, 85],
+          maxzoom: 1,
+          dedupe,
+        }),
+      )
+      assert.deepEqual(server.glyphRequests, ['0-255', '768-1023'])
+      assert.equal(glyphRanges, 'used')
+    })
+  }
+
+  test('requests every range when a tile cannot be read', async () => {
+    const server = await startLabelServer(new Uint8Array([0x1a, 0xff, 0x01]))
+    onTestFinished(server.close)
+    const glyphRanges = await readGlyphRangesMetadata(
+      download({
+        styleUrl: server.styleUrl,
+        bbox: [-180, -85, 180, 85],
+        maxzoom: 0,
+      }),
+    )
+    assert.equal(server.glyphRequests.length, 256)
+    assert.equal(glyphRanges, undefined, 'not marked when all were fetched')
+  })
+
+  test('reads tiles that are gzipped without Content-Encoding', async () => {
+    const server = await startLabelServer(gzipSync(greekTile))
+    onTestFinished(server.close)
+    await streamToBuffer(
+      download({
+        styleUrl: server.styleUrl,
+        bbox: [-180, -85, 180, 85],
+        maxzoom: 0,
+      }),
+    )
+    assert.deepEqual(server.glyphRequests, ['0-255', '768-1023'])
+  })
+
+  test('does not mark packages without glyphs', async () => {
+    const server = await startLabelServer(greekTile, { glyphs: false })
+    onTestFinished(server.close)
+    const glyphRanges = await readGlyphRangesMetadata(
+      download({
+        styleUrl: server.styleUrl,
+        bbox: [-180, -85, 180, 85],
+        maxzoom: 0,
+      }),
+    )
+    assert.equal(glyphRanges, undefined)
   })
 })

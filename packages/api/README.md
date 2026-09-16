@@ -134,6 +134,8 @@ const server = createServer({
 })
 ```
 
+`fallbackGlyph` also receives `{ style }`, the package's stored style, as a third argument. Packages written by `download()` only contain the glyph ranges their labels use, and are marked with `metadata['smp:glyphRanges']: 'used'`, so text added at runtime (e.g. a language switcher) can need ranges the package lacks. With the default fallback those characters render blank. Serve real glyphs for them (e.g. with `notoGlyphFallback`), or, if all your clients run MapLibre GL JS 5.11 or later, return a 404 so that MapLibre draws them with a local font. Older MapLibre GL JS versions and MapLibre Native fail the whole tile when a glyph range fails to load.
+
 #### Packages with no glyphs
 
 A style with no labels is packaged without a `glyphs` property, so nothing in it would ever request a glyph. When `fallbackGlyph` is set (the default), the server still serves glyph requests at the standard SMP glyph path and adds that path as `glyphs` to the served `style.json`. A client that adds its own symbol layer to such a map therefore gets fallback glyphs — empty ones by default, or real ones with `notoGlyphFallback` — instead of a 404. The stored `style.json` is left unchanged, and with `fallbackGlyph: null` no `glyphs` property is added.
@@ -173,11 +175,14 @@ const stream = download({
 | `maxzoom`           | `number`    | Maximum zoom level to download (required)                                           |
 | `mapboxAccessToken` | `string?`   | Mapbox access token (required for Mapbox styles)                                    |
 | `skipLocalGlyphs`   | `boolean?`  | Skip CJK/Hangul/Kana glyph ranges rendered client-side by MapLibre GL               |
+| `allGlyphRanges`    | `boolean?`  | Download every glyph range, not only those used by labels in the downloaded tiles   |
 | `dedupe`            | `boolean?`  | Store duplicate tiles only once to reduce file size                                 |
 | `bufferTiles`       | `number?`   | Extra tile rings to download around `bbox` at each zoom below maxzoom (default `0`) |
 | `onprogress`        | `function?` | Callback receiving a `DownloadProgress` object (see below)                          |
 
 The `skipLocalGlyphs` option skips downloading glyph ranges that MapLibre GL renders client-side via [`localIdeographFontFamily`](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/) (CJK, Hangul, Kana, Yi, and Halfwidth/Fullwidth Forms — 163 of 256 ranges). This significantly reduces download size for styles that use these scripts.
+
+By default only the glyph ranges needed for labels are downloaded, and the package is marked with `metadata['smp:glyphRanges']: 'used'`. While tiles download, the text in each vector tile is scanned for the properties used by the style's `text-field` expressions, and only the Unicode ranges that appear (plus range 0-255, and ranges MapLibre needs for Arabic shaping and vertical CJK punctuation) are fetched for each font. Set `allGlyphRanges: true` to download every range, e.g. if the package's style may later be edited to show other properties.
 
 The `bufferTiles` option downloads extra tile rings around `bbox` at every zoom level below maxzoom so the map is not clipped at the edges of the downloaded area when zooming out (a single source `bounds` rectangle cannot describe a per-zoom buffer). The buffer is not added at maxzoom. When non-zero it is recorded in the package as `metadata['smp:bufferTiles']`, which `createServer`'s [`expandBounds`](#rendering-buffer-tiles-expandbounds) option can use to render those tiles.
 
@@ -274,8 +279,11 @@ Accepts a file path (Node.js) or a `ZipReader` instance (browser). Options:
 ```js
 const result = await validate('map.smp', {
   maxEntries: 500_000, // max ZIP entries before aborting (default: 500,000)
+  glyphCoverage: true, // read tiles to check glyph ranges used by labels (default: true)
 })
 ```
+
+To check glyph coverage, the validator reads every vector tile (and GeoJSON file) that a labelled layer uses, and warns (`incomplete_font_glyphs`) when a font is missing a glyph range needed by that text, using the same rules as `download()`. Ranges MapLibre renders locally (CJK, Hangul, etc.) are never required. Reading tiles can take a while for large packages; set `glyphCoverage: false` to only require range 0-255.
 
 ### Browser support
 

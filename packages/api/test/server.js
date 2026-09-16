@@ -839,3 +839,80 @@ test('server with parameter in base path', async () => {
     )
   }
 })
+
+test('default glyph fallback serves empty glyphs for packages with used glyph ranges', async () => {
+  /** @param {Record<string, unknown>} metadata */
+  async function fetchMissingGlyph(metadata) {
+    const writer = new Writer({
+      version: 8,
+      glyphs: 'https://example.com/{fontstack}/{range}.pbf',
+      metadata,
+      sources: {
+        src: { type: 'vector', tiles: ['https://example.com/{z}/{x}/{y}.mvt'] },
+      },
+      layers: [
+        {
+          id: 'labels',
+          type: 'symbol',
+          source: 'src',
+          'source-layer': 'place',
+          layout: { 'text-field': 'x', 'text-font': ['Test Font'] },
+        },
+      ],
+    })
+    const smpPromise = streamToBuffer(writer.outputStream)
+    await writer.addTile(new Uint8Array([1, 2, 3]), {
+      x: 0,
+      y: 0,
+      z: 0,
+      sourceId: 'src',
+      format: 'mvt',
+    })
+    await writer.addGlyphs(new Blob([new Uint8Array(8)]).stream(), {
+      font: 'Test Font',
+      range: '0-255',
+    })
+    writer.finish()
+    const reader = new Reader(
+      await ZipReader.from(new BufferSource(await smpPromise)),
+    )
+    const server = createServer()
+    const styleResponse = await server.fetch(
+      new Request('http://example.com/style.json'),
+      reader,
+    )
+    const style = await styleResponse.json()
+    assert.equal(style.metadata['smp:glyphRanges'], metadata['smp:glyphRanges'])
+    const glyphUrl = replaceVariables(style.glyphs, {
+      fontstack: 'Test Font',
+      range: '256-511',
+    })
+    const response = await server.fetch(new Request(glyphUrl), reader)
+    await response.arrayBuffer()
+    return response.status
+  }
+  // A failed range breaks whole tiles in MapLibre GL JS < 5.11 and Native
+  assert.equal(await fetchMissingGlyph({ 'smp:glyphRanges': 'used' }), 200)
+  assert.equal(await fetchMissingGlyph({}), 200)
+})
+
+test('fallbackGlyph receives the package style', async () => {
+  const reader = new Reader(
+    fileURLToPath(new URL('./fixtures/demotiles-z2.smp', import.meta.url)),
+  )
+  onTestFinished(() => reader.close())
+  /** @type {unknown} */
+  let receivedStyle
+  const server = createServer({
+    fallbackGlyph(_fontstack, _range, { style }) {
+      receivedStyle = style
+      return new Response('fallback glyph')
+    },
+  })
+  const response = await server.fetch(
+    new Request('http://example.com/fonts/Nonexistent Font/0-255.pbf.gz'),
+    reader,
+  )
+  assert.equal(await response.text(), 'fallback glyph')
+  assert.deepEqual(receivedStyle, await reader.getStyle())
+})

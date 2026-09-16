@@ -64,7 +64,7 @@ function json(obj) {
  * @param {object} [options]
  * @param {string} [options.base='/'] Base path for the server routes
  * @param {((tileId: { x: number, y: number, z: number }, sourceInfo: { sourceId: string, source: import('./types.js').SMPSource }) => Response | Promise<Response>) | null} [options.fallbackTile] Called when a tile is missing from the SMP. Defaults to `emptyTileFallback` (format-aware empty tiles); pass `null` to return 404 instead.
- * @param {((fontstack: string, range: string) => Response | Promise<Response>) | null} [options.fallbackGlyph] Called when a glyph is missing from the SMP. Defaults to `emptyGlyphFallback` (empty PBFs); pass `null` to return 404 instead. When set, packages whose style has no `glyphs` still serve glyph requests at the standard SMP glyph path, and the served `style.json` advertises that path, so clients can add their own text layers.
+ * @param {((fontstack: string, range: string, context: { style: import('./types.js').SMPStyle }) => Response | Promise<Response>) | null} [options.fallbackGlyph] Called when a glyph is missing from the SMP, with the package's stored style. Defaults to `emptyGlyphFallback` (empty PBFs, or 404 for packages with only the glyph ranges their labels use); pass `null` to return 404 instead. When set, packages whose style has no `glyphs` still serve glyph requests at the standard SMP glyph path, and the served `style.json` advertises that path, so clients can add their own text layers.
  * @param {boolean} [options.expandBounds=true] When the package was written with buffer tiles (`metadata['smp:bufferTiles']`), widen each tile source's `bounds` to the whole world in the served `style.json`, so the lower-zoom buffer tiles (which extend beyond `smp:bounds`) are requested and rendered. Pair with `fallbackTile` so that tiles outside the downloaded area resolve to empty tiles rather than 404s.
  * @returns {{ fetch: (request: RequestLike, reader: ReaderLike) => Promise<Response> }} server instance
  */
@@ -147,16 +147,19 @@ export function createServer({
         }
 
         if (fallbackGlyph) {
+          const style = await getCachedStyle(reader)
           let glyphRegex = glyphRegexCache.get(reader)
           if (glyphRegex === undefined) {
-            const style = await getCachedStyle(reader)
             glyphRegex = buildGlyphRegex(style.glyphs)
             glyphRegexCache.set(reader, glyphRegex)
           }
           if (glyphRegex) {
             const match = path.match(glyphRegex)
             if (match?.groups) {
-              return fallbackGlyph(match.groups.fontstack, match.groups.range)
+              // Cloned so a callback can't modify the cached style
+              return fallbackGlyph(match.groups.fontstack, match.groups.range, {
+                style: structuredClone(style),
+              })
             }
           }
         }

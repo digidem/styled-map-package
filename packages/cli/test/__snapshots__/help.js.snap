@@ -32,6 +32,8 @@ Options:
                                       styles)
   --skip-local-glyphs                 Skip CJK/Hangul/Kana glyph ranges rendered
                                       locally by MapLibre GL
+  --all-glyph-ranges                  download every glyph range, not only those
+                                      used by labels in the downloaded tiles
   -d, --dedupe                        deduplicate tiles with identical content
                                       to reduce file size
   --buffer-tiles                      download an extra tile ring around the

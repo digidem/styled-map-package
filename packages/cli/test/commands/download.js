@@ -308,6 +308,26 @@ describe('runDownload', () => {
     )
   })
 
+  test('passes allGlyphRanges option to download', async () => {
+    const deps = makeDeps()
+
+    await runDownload(
+      {
+        styleUrl: 'https://example.com/style.json',
+        bbox: [11, 47, 12, 47.5],
+        zoom: 5,
+        output: 'out.smp',
+        token: undefined,
+        allGlyphRanges: true,
+      },
+      deps,
+    )
+
+    expect(deps.download).toHaveBeenCalledWith(
+      expect.objectContaining({ allGlyphRanges: true }),
+    )
+  })
+
   test('bufferTiles flag maps to a one-tile ring', async () => {
     const deps = makeDeps()
 

@@ -1,4 +1,5 @@
 import { StyleDownloader } from './style-downloader.js'
+import { GlyphRangeCollector } from './utils/glyph-ranges.js'
 import { noop } from './utils/misc.js'
 import { readableFromAsync } from './utils/streams.js'
 import { Writer } from './writer.js'
@@ -25,6 +26,7 @@ import { Writer } from './writer.js'
  * @param { (progress: DownloadProgress) => void } [opts.onprogress] Optional callback for reporting progress
  * @param {string} [opts.mapboxAccessToken]
  * @param {boolean} [opts.skipLocalGlyphs] Skip glyph ranges rendered client-side by MapLibre GL via localIdeographFontFamily (CJK, Hangul, Kana, Yi, etc.)
+ * @param {boolean} [opts.allGlyphRanges] Download every glyph range, rather than only the ranges needed for the labels in the downloaded tiles
  * @param {boolean} [opts.dedupe] When true, duplicate tiles are stored only once (see {@link Writer})
  * @param {number} [opts.bufferTiles=0] Number of extra tile rings to download around `bbox` at each zoom level below maxzoom, so the map is not clipped at the edges of the downloaded area when zooming out. Recorded in the package as `metadata['smp:bufferTiles']`.
  * @param {AbortSignal} [opts.signal] AbortSignal to cancel the download. No further requests are issued once aborted; cancel the returned stream to release downloads already in progress.
@@ -37,6 +39,7 @@ export function download({
   onprogress,
   mapboxAccessToken,
   skipLocalGlyphs,
+  allGlyphRanges,
   dedupe,
   bufferTiles = 0,
   signal: signalExt,
@@ -101,11 +104,17 @@ export function download({
           }
           handleProgress({ sprites: { ...progress.sprites, done: true } })
 
+          const glyphRanges = allGlyphRanges
+            ? undefined
+            : new GlyphRangeCollector(style)
           const tiles = downloader.getTiles({
             bounds: bbox,
             maxzoom,
             bufferTiles,
             signal,
+            onTileData: glyphRanges
+              ? (data, sourceId) => glyphRanges.addTile(data, sourceId)
+              : undefined,
             onprogress: (tileStats) =>
               handleProgress({ tiles: { ...tileStats, done: false } }),
           })
@@ -115,8 +124,13 @@ export function download({
           )
           handleProgress({ tiles: { ...progress.tiles, done: true } })
 
+          const ranges = glyphRanges?.getRanges() ?? undefined
+          if (ranges && style.glyphs) {
+            writer.setMetadata('smp:glyphRanges', 'used')
+          }
           const glyphs = downloader.getGlyphs({
             skipLocalGlyphs,
+            ranges,
             signal,
             onprogress: (glyphStats) =>
               handleProgress({ glyphs: { ...glyphStats, done: false } }),

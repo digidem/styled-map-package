@@ -211,6 +211,12 @@ This indicates that tiles for the `openmaptiles` source are stored under `s/0/` 
 - These extra tiles are OPTIONAL and do not change the completeness requirement: completeness is defined relative to `smp:bounds` (see [Section 5.8](#58-tile-bounds-and-completeness)). Clients MUST NOT rely on buffer tiles being present.
 - Because a tile source's `bounds` is a single rectangle, it cannot describe a per-zoom buffer. A consumer that wants to render the lower-zoom buffer tiles MAY, at serve time, widen each tile source's `bounds` (e.g. to the whole world) so that mapping libraries request them. When doing so, the consumer SHOULD also serve empty tiles for requests that fall outside the available data, since widening `bounds` will cause requests for tiles that are not present.
 
+#### 4.3.5 `smp:glyphRanges` (OPTIONAL)
+
+- Type: String. The only defined value is `"used"`.
+- `"used"` indicates that the writer included only the glyph ranges needed to render the labels in the package (see [Section 6.6](#66-font-coverage)), rather than every range. Absent means the writer made no such claim.
+- A client that renders text the package's labels do not contain (for example by changing a layer's `text-field` or adding a symbol layer) may request ranges that are not present. Serving implementations MAY use this property to decide how to answer those requests (see [Section 10.5](#105-missing-glyph-ranges)).
+
 ### 4.4 Additional Style Properties
 
 The standard [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/) properties `center` and `zoom`, if set, SHOULD be consistent with the data in the package — i.e. `center` SHOULD be within `smp:bounds` and `zoom` SHOULD be within the zoom range of the tile data (between `minzoom` and `smp:maxzoom`).
@@ -361,7 +367,12 @@ The `text-font` property in MapLibre GL supports [expressions](https://maplibre.
 
 ### 6.6 Font Coverage
 
-The SMP file MUST include glyph files for every `{fontstack}` value that MapLibre GL will request based on the `text-font` properties in the style. All Unicode ranges used by text content in the vector tile data MUST be included for each font stack. Including all non-locally-rendered Unicode ranges (see below) is RECOMMENDED to ensure complete glyph coverage.
+The SMP file MUST include glyph files for every `{fontstack}` value that MapLibre GL will request based on the `text-font` properties in the style. For each font stack, the file MUST include every Unicode range needed to render the style's labels from the package's tile and GeoJSON data. That is the ranges of:
+
+- the feature property values (and feature IDs) that the `text-field` expressions of symbol layers can display, and any strings in those expressions;
+- the text as MapLibre GL transforms it before rendering, including upper- and lower-case forms (`text-transform`, `upcase`, `downcase`), Arabic presentation forms produced by Arabic shaping, vertical punctuation forms used for vertical text, and the digits and separators produced by `number-format`.
+
+Because the exact set depends on how expressions evaluate at render time, validators MAY check this requirement with an approximation and report missing ranges as warnings. Writers that cannot determine this set SHOULD include all non-locally-rendered ranges (see below). Including all non-locally-rendered ranges is also RECOMMENDED when clients may display text that is not in the package's labels. Writers that include only the needed ranges SHOULD set `smp:glyphRanges` to `"used"` (see [Section 4.3.5](#435-smpglyphranges-optional)).
 
 #### 6.6.1 Locally Rendered Ranges
 
@@ -518,6 +529,15 @@ HTTP range requests are not expected for SMP resource serving and implementation
 Mapping libraries such as [MapLibre GL](https://maplibre.org/) percent-encode characters in request URLs per [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986#section-2.1). For example, a font named `Open Sans Regular` will be requested as `Open%20Sans%20Regular` in the URL path.
 
 Serving implementations MUST percent-decode the request path using UTF-8 before looking up the corresponding ZIP entry name. Since SMP URIs in `style.json` store paths as literal UTF-8 (see [Section 4.2.1](#421-uri-to-path-mapping)), the decoded request path will match the ZIP entry name directly.
+
+### 10.5 Missing Glyph Ranges
+
+Mapping libraries handle a missing glyph range differently depending on the response:
+
+- An empty glyph file (a successful response with no glyphs) renders the characters in that range as blank space, in all versions of MapLibre GL.
+- A failed request (e.g. HTTP 404) makes MapLibre GL JS 5.11 and later draw the characters with a local font. Earlier versions of MapLibre GL JS, and MapLibre Native, fail to lay out the whole tile, so its other features are not shown either.
+
+Serving implementations SHOULD therefore answer requests for missing glyph ranges with empty glyph files, or with glyphs from another source, unless they know that all clients draw failed ranges locally. This matters most for packages with `smp:glyphRanges` set to `"used"` (see [Section 4.3.5](#435-smpglyphranges-optional)).
 
 ## 11. Security Considerations
 

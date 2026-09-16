@@ -35,6 +35,7 @@ smp download https://demotiles.maplibre.org/style.json \
 | `-t, --token <token>`  | Mapbox access token (required for Mapbox styles)                       |
 | `-d, --dedupe`         | Deduplicate tiles with identical content to reduce file size           |
 | `--skip-local-glyphs`  | Skip CJK/Hangul/Kana glyph ranges rendered locally by MapLibre GL      |
+| `--all-glyph-ranges`   | Download every glyph range, not only those used by downloaded labels   |
 | `--buffer-tiles`       | Download an extra tile ring around the bbox at each zoom below maxzoom |
 
 When run interactively, missing options are prompted for.
@@ -91,6 +92,8 @@ Reports errors (spec MUST violations) and warnings (SHOULD/RECOMMENDED), each an
 - **fatal** — the file cannot be opened by the reader
 - **rendering** — the map opens but content will be visibly broken (missing tiles, glyphs, sprites)
 - **spec** — non-compliance that doesn't affect practical use
+
+Glyph coverage is checked by reading the vector tiles and requiring every glyph range their labels use. Pass `--no-glyph-coverage` to skip reading tiles and only require range 0-255.
 
 Exits with code 0 if valid, 1 if errors are found.
 

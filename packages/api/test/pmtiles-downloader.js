@@ -234,6 +234,30 @@ describe('downloadPmtilesTiles', () => {
     assert.equal(tiles.skipped.length, 0)
   })
 
+  test('calls onTileData with uncompressed vector tile data', async () => {
+    const handle = await openPmtiles(`${baseUrl}/demotiles-z2.pmtiles`)
+    /** @type {Uint8Array[]} */
+    const tileData = []
+    const tiles = downloadPmtilesTiles({
+      pmtiles: handle.pmtiles,
+      format: handle.format,
+      bounds: [...WORLD],
+      maxzoom: 1,
+      onTileData: (data) => tileData.push(data),
+    })
+    /** @type {Buffer[]} */
+    const gunzipped = []
+    for await (const [stream] of tiles) {
+      gunzipped.push(gunzipSync(await streamToBuffer(stream)))
+    }
+    assert.equal(tileData.length, 5)
+    assert.deepEqual(
+      tileData.map((data) => Buffer.from(data)),
+      gunzipped,
+      'onTileData receives the same bytes that are stored',
+    )
+  })
+
   test('reads raster tiles without gzip compression', async () => {
     const handle = await openPmtiles(`${baseUrl}/plain_1.pmtiles`)
     const tiles = downloadPmtilesTiles({

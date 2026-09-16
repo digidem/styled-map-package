@@ -454,6 +454,19 @@ export class Writer {
   }
 
   /**
+   * Set a property of the output style's `metadata`. Call before `finish()`.
+   *
+   * @param {string} key
+   * @param {unknown} value
+   */
+  setMetadata(key, value) {
+    this.#style.metadata = {
+      .../** @type {object | undefined} */ (this.#style.metadata),
+      [key]: value,
+    }
+  }
+
+  /**
    * Finalize the styled map package and write the style to the archive.
    * This method must be called to complete the archive.
    * You must wait for your destination write stream to 'finish' before using the output.
