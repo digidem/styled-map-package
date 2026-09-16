@@ -9,8 +9,12 @@ const program = new Command()
 program
   .description('Validate a styled map package file')
   .argument('<file>', 'path to .smp file to validate')
-  .action(async (filepath) => {
-    const result = await validate(filepath)
+  .option(
+    '--no-glyph-coverage',
+    'skip reading tiles to check glyph ranges used by labels (only require 0-255)',
+  )
+  .action(async (filepath, { glyphCoverage }) => {
+    const result = await validate(filepath, { glyphCoverage })
 
     if (result.valid) {
       console.log(logSymbols.success, chalk.green('Valid SMP file'))

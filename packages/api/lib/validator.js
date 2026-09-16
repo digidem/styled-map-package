@@ -1,7 +1,12 @@
 import { ZipReader } from '@gmaclennan/zip-reader'
 import { SphericalMercator } from '@mapbox/sphericalmercator'
-import { expressions, validateStyleMin } from '@maplibre/maplibre-gl-style-spec'
+import {
+  expressions,
+  migrate,
+  validateStyleMin,
+} from '@maplibre/maplibre-gl-style-spec'
 
+import { GlyphRangeCollector } from './utils/glyph-ranges.js'
 import { isLocallyRenderedRange } from './utils/style.js'
 import { STYLE_FILE, URI_BASE, VERSION_FILE } from './utils/templates.js'
 
@@ -10,9 +15,15 @@ const SUPPORTED_MAJOR_VERSIONS = [1]
 
 const DEFAULT_MAX_ENTRIES = 500_000
 
+// Label data larger than this is not read for the glyph coverage check, which
+// then requires every glyph range. Limits memory use on untrusted archives.
+const MAX_TILE_BYTES = 16 * 1024 * 1024
+const MAX_GEOJSON_BYTES = 64 * 1024 * 1024
+
 const sm = new SphericalMercator({ size: 256 })
 
 const textEncoder = new TextEncoder()
+const textDecoder = new TextDecoder()
 
 /**
  * @typedef {object} ValidationIssue
@@ -37,6 +48,9 @@ const textEncoder = new TextEncoder()
  * @property {number} [maxEntries=500_000] Maximum number of ZIP entries to
  *   process before aborting. Default matches the Reader default (~a global z9
  *   tileset).
+ * @property {boolean} [glyphCoverage=true] Read the vector tiles and check that
+ *   every glyph range used by their labels is present. When `false`, only range
+ *   0-255 is required.
  */
 
 /**
@@ -108,7 +122,7 @@ const result = (issues) => ({
  * @returns {Promise<ValidationResult>}
  */
 export async function validate(source, options = {}) {
-  const { maxEntries = DEFAULT_MAX_ENTRIES } = options
+  const { maxEntries = DEFAULT_MAX_ENTRIES, glyphCoverage = true } = options
 
   /** @type {ValidationIssue[]} */
   const issues = []
@@ -124,7 +138,8 @@ export async function validate(source, options = {}) {
     if (typeof source === 'string') {
       const { FileSource } = await import('@gmaclennan/zip-reader/file-source')
       fileSource = await FileSource.open(source)
-      zip = await ZipReader.from(fileSource)
+      // Deduplicated tiles share file data, like the Reader allows
+      zip = await ZipReader.from(fileSource, { skipUniqueEntryCheck: true })
     } else {
       zip = source
     }
@@ -151,7 +166,7 @@ export async function validate(source, options = {}) {
 
     validateMetadata(style, error, warn)
     validateSources(style, entries, error, warn)
-    validateGlyphs(style, entries, error, warn)
+    await validateGlyphs(style, entries, error, warn, { glyphCoverage })
     validateSprites(style, entries, error, warn)
   } finally {
     if (fileSource) await fileSource.close()
@@ -348,6 +363,16 @@ function validateMetadata(style, error, warn) {
         'metadata.smp:bounds',
       )
     }
+  }
+
+  // §4.3.5: smp:glyphRanges
+  const glyphRanges = metadata['smp:glyphRanges']
+  if (glyphRanges !== undefined && glyphRanges !== 'used') {
+    warn(
+      'invalid_smp_glyph_ranges',
+      `smp:glyphRanges must be "used", got ${JSON.stringify(glyphRanges)}`,
+      'metadata.smp:glyphRanges',
+    )
   }
 
   // §4.3.2: smp:maxzoom
@@ -563,8 +588,9 @@ const TOTAL_GLYPH_RANGES = 256
  * @param {Map<string, import('@gmaclennan/zip-reader').ZipEntry>} entries
  * @param {IssueFn} error
  * @param {IssueFn} warn
+ * @param {{ glyphCoverage: boolean }} opts
  */
-function validateGlyphs(style, entries, error, warn) {
+async function validateGlyphs(style, entries, error, warn, { glyphCoverage }) {
   if (typeof style.glyphs !== 'string') return
 
   if (!style.glyphs.startsWith(URI_BASE)) {
@@ -612,38 +638,205 @@ function validateGlyphs(style, entries, error, warn) {
     return
   }
 
-  // §6.6: Per-fontstack glyph range completeness
-  // Ranges rendered client-side by MapLibre's localIdeographFontFamily
-  // (CJK, Hangul, Kana, Yi, etc.) are excluded from the expected count.
+  // §6.6: Per-fontstack glyph range completeness. Ranges rendered client-side
+  // by MapLibre's localIdeographFontFamily (CJK, Hangul, Kana, Yi, etc.) are
+  // never required.
   if (!hasPlaceholders) return
   const fontStacks = collectFontStacks(style.layers || [])
+  if (fontStacks.size === 0) return
+  const usedRanges = glyphCoverage
+    ? await getUsedGlyphRanges(style, entries)
+    : [0]
+  const requiredRanges = (
+    usedRanges ?? Array.from({ length: TOTAL_GLYPH_RANGES }, (_, i) => i * 256)
+  ).filter((start) => !isLocallyRenderedRange(start))
+
+  /** @param {string} fontStack @param {number} start */
+  const glyphPath = (fontStack, start) =>
+    glyphTemplate
+      .replace('{fontstack}', fontStack)
+      .replace('{range}', `${start}-${start + 255}`)
+
   for (const fontStack of fontStacks) {
-    let presentCount = 0
-    let expectedCount = 0
-    for (let i = 0; i < TOTAL_GLYPH_RANGES; i++) {
-      const start = i * 256
-      if (isLocallyRenderedRange(start)) continue
-      expectedCount++
-      const range = `${start}-${start + 255}`
-      const path = glyphTemplate
-        .replace('{fontstack}', fontStack)
-        .replace('{range}', range)
-      if (entries.has(path)) presentCount++
+    let hasAnyRange = false
+    for (let i = 0; i < TOTAL_GLYPH_RANGES && !hasAnyRange; i++) {
+      hasAnyRange = entries.has(glyphPath(fontStack, i * 256))
     }
-    if (presentCount === 0) {
+    if (!hasAnyRange) {
       error(
         'missing_font_glyphs',
         `No glyph files found for font "${fontStack}"`,
         'glyphs',
       )
-    } else if (presentCount < expectedCount) {
-      warn(
-        'incomplete_font_glyphs',
-        `Font "${fontStack}" has ${presentCount} of ${expectedCount} required glyph ranges (${TOTAL_GLYPH_RANGES - expectedCount} CJK/Hangul/Kana ranges are rendered locally by MapLibre)`,
-        'glyphs',
-      )
+      continue
+    }
+    const missing = requiredRanges
+      .filter((start) => !entries.has(glyphPath(fontStack, start)))
+      .map((start) => `${start}-${start + 255}`)
+    if (missing.length === 0) continue
+    const examples = missing.slice(0, 5).join(', ')
+    const suffix = missing.length > 5 ? ` and ${missing.length - 5} more` : ''
+    const reason = usedRanges
+      ? 'used by labels'
+      : 'that labels may use (the ranges used could not be determined)'
+    warn(
+      'incomplete_font_glyphs',
+      `Font "${fontStack}" is missing ${missing.length} glyph range(s) ${reason}: ${examples}${suffix}`,
+      'glyphs',
+    )
+  }
+}
+
+/**
+ * Find the glyph ranges needed by the labels in the package's vector tiles
+ * and GeoJSON, or `null` if some of that data could not be read.
+ *
+ * @param {any} style
+ * @param {Map<string, import('@gmaclennan/zip-reader').ZipEntry>} entries
+ * @returns {Promise<number[] | null>}
+ */
+async function getUsedGlyphRanges(style, entries) {
+  try {
+    // Legacy property functions are only understood as expressions
+    const styleV8 = migrate(structuredClone(style))
+    return await collectUsedGlyphRanges(styleV8, entries)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * @param {any} style
+ * @param {Map<string, import('@gmaclennan/zip-reader').ZipEntry>} entries
+ * @returns {Promise<number[] | null>}
+ */
+async function collectUsedGlyphRanges(style, entries) {
+  /** @type {Set<string>} */
+  const labelSourceIds = new Set()
+  for (const layer of style.layers || []) {
+    if (layer.type === 'symbol' && layer.layout?.['text-field'] !== undefined) {
+      labelSourceIds.add(layer.source)
     }
   }
+  /** @type {Record<string, any>} */
+  const sources = {}
+  let geojsonReadFailed = false
+  for (const [sourceId, source] of Object.entries(style.sources || {})) {
+    const src = /** @type {any} */ (source)
+    const dataEntry =
+      labelSourceIds.has(sourceId) &&
+      src.type === 'geojson' &&
+      typeof src.data === 'string' &&
+      src.data.startsWith(URI_BASE)
+        ? entries.get(src.data.slice(URI_BASE.length))
+        : undefined
+    if (!dataEntry) {
+      sources[sourceId] = src
+      continue
+    }
+    try {
+      if (dataEntry.uncompressedSize > MAX_GEOJSON_BYTES) {
+        throw new Error('GeoJSON data too large')
+      }
+      const data = await readLimited(dataEntry.readable(), MAX_GEOJSON_BYTES)
+      sources[sourceId] = { ...src, data: JSON.parse(textDecoder.decode(data)) }
+    } catch {
+      geojsonReadFailed = true
+      sources[sourceId] = src
+    }
+  }
+  const collector = new GlyphRangeCollector({ ...style, sources })
+  if (geojsonReadFailed) collector.setNeedsAllRanges()
+
+  for (const [sourceId, src] of Object.entries(sources)) {
+    if (src.type !== 'vector' || !collector.wantsTile(sourceId)) continue
+    const template = Array.isArray(src.tiles) ? src.tiles[0] : undefined
+    if (
+      typeof template !== 'string' ||
+      !template.startsWith(URI_BASE) ||
+      !['{z}', '{x}', '{y}'].every((p) => template.includes(p))
+    ) {
+      continue
+    }
+    const tilePathPattern = tileTemplateToRegExp(
+      template.slice(URI_BASE.length),
+    )
+    // Deduplicated tiles share one local file entry
+    /** @type {Set<number>} */
+    const seenOffsets = new Set()
+    for (const [name, entry] of entries) {
+      if (!collector.wantsTile(sourceId)) break
+      if (!tilePathPattern.test(name)) continue
+      if (seenOffsets.has(entry.fileHeaderOffset)) continue
+      seenOffsets.add(entry.fileHeaderOffset)
+      try {
+        collector.addTile(await readTileData(entry), sourceId)
+      } catch {
+        collector.setNeedsAllRanges()
+      }
+    }
+  }
+  return collector.getRanges()
+}
+
+/**
+ * @param {string} template Tile path template with `{z}`, `{x}` and `{y}`
+ * @returns {RegExp}
+ */
+function tileTemplateToRegExp(template) {
+  const escaped = template.replace(/[.*+?^$()|[\]\\]/g, '\\$&')
+  return new RegExp(`^${escaped.replace(/\{[zxy]\}/g, '\\d+')}$`)
+}
+
+/**
+ * Read a vector tile entry, decompressing it if it is gzipped. Throws for
+ * tiles larger than `MAX_TILE_BYTES`.
+ *
+ * @param {import('@gmaclennan/zip-reader').ZipEntry} entry
+ * @returns {Promise<Uint8Array>}
+ */
+async function readTileData(entry) {
+  if (entry.uncompressedSize > MAX_TILE_BYTES) {
+    throw new Error('Tile too large')
+  }
+  const data = await readLimited(entry.readable(), MAX_TILE_BYTES)
+  if (data[0] !== 0x1f || data[1] !== 0x8b) return data
+  const decompressed = new Blob([data])
+    .stream()
+    .pipeThrough(new DecompressionStream('gzip'))
+  return readLimited(decompressed, MAX_TILE_BYTES)
+}
+
+/**
+ * Read a stream into a single buffer, throwing once it exceeds `maxBytes`.
+ *
+ * @param {ReadableStream<Uint8Array>} stream
+ * @param {number} maxBytes
+ * @returns {Promise<Uint8Array<ArrayBuffer>>}
+ */
+async function readLimited(stream, maxBytes) {
+  /** @type {Uint8Array[]} */
+  const chunks = []
+  let length = 0
+  const reader = stream.getReader()
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      length += value.byteLength
+      if (length > maxBytes) throw new Error('Data too large')
+      chunks.push(value)
+    }
+  } finally {
+    reader.cancel().catch(() => {})
+  }
+  const data = new Uint8Array(length)
+  let offset = 0
+  for (const chunk of chunks) {
+    data.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return data
 }
 
 /**

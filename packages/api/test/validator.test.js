@@ -4,9 +4,11 @@ import { ZipWriter } from 'zip-writer'
 
 import { randomBytes } from 'node:crypto'
 import { rm } from 'node:fs/promises'
+import { gzipSync } from 'node:zlib'
 
 import { validate } from '../lib/validator.js'
 import { Writer } from '../lib/writer.js'
+import { encodeTile } from './utils/mvt-encode.js'
 import { streamToBuffer } from './utils/stream-consumers.js'
 
 /** @param {import('../lib/validator.js').ValidationResult} result */
@@ -28,6 +30,37 @@ async function writeTempFile(data) {
   const filepath = await temporaryWrite(data)
   onTestFinished(() => rm(filepath, { force: true }))
   return filepath
+}
+
+/**
+ * A style with one labelled vector source layer, using font "Test Font"
+ *
+ * @param {string[]} [tiles]
+ * @returns {any}
+ */
+function labelledStyle(tiles = ['smp://maps.v1/s/0/{z}/{x}/{y}.mvt.gz']) {
+  return {
+    version: 8,
+    sources: {
+      vt: {
+        type: 'vector',
+        tiles,
+        bounds: [-180, -85.051129, 180, 85.051129],
+        minzoom: 0,
+        maxzoom: 0,
+      },
+    },
+    layers: [
+      {
+        id: 'labels',
+        type: 'symbol',
+        source: 'vt',
+        'source-layer': 'place',
+        layout: { 'text-field': ['get', 'name'], 'text-font': ['Test Font'] },
+      },
+    ],
+    glyphs: 'smp://maps.v1/fonts/{fontstack}/{range}.pbf.gz',
+  }
 }
 
 /**
@@ -329,6 +362,23 @@ describe('validate — SMP metadata (§4.3)', () => {
       !hasError(result, 'missing_smp_bounds'),
       'should be warning not error',
     )
+  })
+
+  test('invalid smp:glyphRanges → warning', async () => {
+    const filepath = await createZipFile([
+      { name: 'VERSION', data: '1.0\n' },
+      {
+        name: 'style.json',
+        data: JSON.stringify({
+          version: 8,
+          sources: {},
+          layers: [],
+          metadata: { 'smp:glyphRanges': 'all' },
+        }),
+      },
+    ])
+    const result = await validate(filepath)
+    assert(hasWarning(result, 'invalid_smp_glyph_ranges'))
   })
 
   test('smp:bounds with non-numeric values → warning', async () => {
@@ -796,45 +846,218 @@ describe('validate — glyphs (§6)', () => {
     assert(hasError(result, 'missing_font_glyphs'))
   })
 
-  test('font with partial glyph ranges → incomplete_font_glyphs warning', async () => {
-    const style = {
-      version: 8,
-      sources: {},
-      layers: [
-        {
-          id: 'labels',
-          type: 'symbol',
-          source: 'test',
-          layout: {
-            'text-field': '{name}',
-            'text-font': ['Noto Sans Regular'],
-          },
-        },
-      ],
-      glyphs: 'smp://maps.v1/fonts/{fontstack}/{range}.pbf.gz',
-    }
-    // Only provide 3 of 93 required (non-locally-rendered) ranges
+  test('missing range 0-255 → incomplete_font_glyphs warning', async () => {
     const filepath = await createZipFile([
       { name: 'VERSION', data: '1.0\n' },
-      { name: 'style.json', data: JSON.stringify(style) },
-      {
-        name: 'fonts/Noto Sans Regular/0-255.pbf.gz',
-        data: new Uint8Array(64),
-      },
-      {
-        name: 'fonts/Noto Sans Regular/256-511.pbf.gz',
-        data: new Uint8Array(64),
-      },
-      {
-        name: 'fonts/Noto Sans Regular/512-767.pbf.gz',
-        data: new Uint8Array(64),
-      },
+      { name: 'style.json', data: JSON.stringify(labelledStyle([])) },
+      { name: 'fonts/Test Font/256-511.pbf.gz', data: new Uint8Array(64) },
     ])
     const result = await validate(filepath)
-    assert(hasWarning(result, 'incomplete_font_glyphs'))
     const w = warnings(result).find((i) => i.type === 'incomplete_font_glyphs')
-    // 93 required ranges (256 total minus 163 locally-rendered)
-    assert(w?.message.includes('3 of 93'))
+    assert.include(w?.message, 'missing 1 glyph range(s) used by labels: 0-255')
+  })
+
+  test('ranges used by tile labels must be present', async () => {
+    const tile = gzipSync(
+      encodeTile([
+        { name: 'place', features: [{ name: 'Αθήνα' }, { name: 'Москва' }] },
+        // Not referenced by text-field, so not required
+        { name: 'place', features: [{ other: 'القاهرة' }] },
+      ]),
+    )
+    const files = [
+      { name: 'VERSION', data: '1.0\n' },
+      { name: 'style.json', data: JSON.stringify(labelledStyle()) },
+      { name: 's/0/0/0/0.mvt.gz', data: tile },
+      { name: 'fonts/Test Font/0-255.pbf.gz', data: new Uint8Array(8) },
+      { name: 'fonts/Test Font/768-1023.pbf.gz', data: new Uint8Array(8) },
+    ]
+    const incomplete = await validate(await createZipFile(files))
+    const w = warnings(incomplete).find(
+      (i) => i.type === 'incomplete_font_glyphs',
+    )
+    assert.include(
+      w?.message,
+      'missing 1 glyph range(s) used by labels: 1024-1279',
+    )
+
+    const complete = await validate(
+      await createZipFile([
+        ...files,
+        { name: 'fonts/Test Font/1024-1279.pbf.gz', data: new Uint8Array(8) },
+      ]),
+    )
+    assert(!hasWarning(complete, 'incomplete_font_glyphs'))
+    assert(complete.valid)
+  })
+
+  test('glyphCoverage: false only requires range 0-255', async () => {
+    const tile = gzipSync(
+      encodeTile([{ name: 'place', features: [{ name: 'Αθήνα' }] }]),
+    )
+    const filepath = await createZipFile([
+      { name: 'VERSION', data: '1.0\n' },
+      { name: 'style.json', data: JSON.stringify(labelledStyle()) },
+      { name: 's/0/0/0/0.mvt.gz', data: tile },
+      { name: 'fonts/Test Font/0-255.pbf.gz', data: new Uint8Array(8) },
+    ])
+    assert(
+      hasWarning(await validate(filepath), 'incomplete_font_glyphs'),
+      'Greek range is required by default',
+    )
+    const result = await validate(filepath, { glyphCoverage: false })
+    assert(!hasWarning(result, 'incomplete_font_glyphs'))
+  })
+
+  test('unreadable tile data requires all non-local ranges', async () => {
+    const filepath = await createZipFile([
+      { name: 'VERSION', data: '1.0\n' },
+      { name: 'style.json', data: JSON.stringify(labelledStyle()) },
+      { name: 's/0/0/0/0.mvt.gz', data: new Uint8Array([0x1f, 0x8b, 1, 2]) },
+      { name: 'fonts/Test Font/0-255.pbf.gz', data: new Uint8Array(8) },
+    ])
+    const result = await validate(filepath)
+    const w = warnings(result).find((i) => i.type === 'incomplete_font_glyphs')
+    // 93 required ranges (256 total minus 163 locally-rendered), 1 present
+    assert.include(w?.message, 'missing 92 glyph range(s)')
+    assert.include(w?.message, 'could not be determined')
+  })
+
+  test('oversized tile data requires all non-local ranges', async () => {
+    // 64 MiB of zeros gzips to about 64 KB
+    const bomb = gzipSync(new Uint8Array(64 * 1024 * 1024))
+    const filepath = await createZipFile([
+      { name: 'VERSION', data: '1.0\n' },
+      { name: 'style.json', data: JSON.stringify(labelledStyle()) },
+      { name: 's/0/0/0/0.mvt.gz', data: bomb },
+      { name: 'fonts/Test Font/0-255.pbf.gz', data: new Uint8Array(8) },
+    ])
+    const result = await validate(filepath)
+    const w = warnings(result).find((i) => i.type === 'incomplete_font_glyphs')
+    assert.include(w?.message, 'missing 92 glyph range(s)')
+  })
+
+  test('glyph coverage handles unusual label styles', async () => {
+    const tile = gzipSync(
+      encodeTile([{ name: 'place', features: [{ name: 'Αθήνα' }] }]),
+    )
+    /** @param {any} style */
+    const validateStyle = async (style) => {
+      const result = await validate(
+        await createZipFile([
+          { name: 'VERSION', data: '1.0\n' },
+          { name: 'style.json', data: JSON.stringify(style) },
+          { name: 's/0/0/0/0.mvt.gz', data: tile },
+          { name: 'fonts/Test Font/0-255.pbf.gz', data: new Uint8Array(8) },
+        ]),
+      )
+      return warnings(result).find((i) => i.type === 'incomplete_font_glyphs')
+        ?.message
+    }
+
+    const nullPromoteId = labelledStyle()
+    nullPromoteId.sources.vt.promoteId = null
+    assert.include(
+      await validateStyle(nullPromoteId),
+      'used by labels: 768-1023',
+      'null promoteId does not throw',
+    )
+
+    const legacyFunction = labelledStyle()
+    legacyFunction.layers[0].layout['text-field'] = {
+      type: 'identity',
+      property: 'name',
+    }
+    assert.include(
+      await validateStyle(legacyFunction),
+      'used by labels: 768-1023',
+      'legacy property functions are migrated',
+    )
+
+    const noBounds = labelledStyle()
+    delete noBounds.sources.vt.bounds
+    assert.include(
+      await validateStyle(noBounds),
+      'used by labels: 768-1023',
+      'tiles are read without source bounds',
+    )
+
+    const missingGeoJSON = labelledStyle()
+    missingGeoJSON.sources.geo = {
+      type: 'geojson',
+      data: 'smp://maps.v1/s/missing.json',
+    }
+    missingGeoJSON.layers.push({
+      ...missingGeoJSON.layers[0],
+      id: 'geo-labels',
+      source: 'geo',
+      'source-layer': undefined,
+    })
+    assert.include(
+      await validateStyle(missingGeoJSON),
+      'could not be determined',
+      'unreadable GeoJSON requires all ranges',
+    )
+  })
+
+  test('ranges used by GeoJSON file labels must be present', async () => {
+    const style = {
+      ...labelledStyle(),
+      sources: {
+        geo: { type: 'geojson', data: 'smp://maps.v1/s/geo.json' },
+      },
+    }
+    style.layers[0] = { ...style.layers[0], source: 'geo' }
+    delete style.layers[0]['source-layer']
+    const geojson = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [0, 0] },
+          properties: { name: 'Москва' },
+        },
+      ],
+    }
+    const result = await validate(
+      await createZipFile([
+        { name: 'VERSION', data: '1.0\n' },
+        { name: 'style.json', data: JSON.stringify(style) },
+        { name: 's/geo.json', data: JSON.stringify(geojson) },
+        { name: 'fonts/Test Font/0-255.pbf.gz', data: new Uint8Array(8) },
+      ]),
+    )
+    const w = warnings(result).find((i) => i.type === 'incomplete_font_glyphs')
+    assert.include(w?.message, 'used by labels: 1024-1279')
+  })
+
+  test('deduplicated tiles are validated', async () => {
+    const style = labelledStyle()
+    const writer = new Writer(/** @type {any} */ (style), { dedupe: true })
+    const tile = encodeTile([{ name: 'place', features: [{ name: 'Αθήνα' }] }])
+    for (const [x, y] of [
+      [0, 0],
+      [1, 0],
+    ]) {
+      await writer.addTile(new Blob([tile]).stream(), {
+        x,
+        y,
+        z: 1,
+        sourceId: 'vt',
+        format: 'mvt',
+      })
+    }
+    await writer.addGlyphs(new Blob([new Uint8Array(8)]).stream(), {
+      font: 'Test Font',
+      range: '0-255',
+    })
+    writer.finish()
+    const filepath = await writeTempFile(
+      await streamToBuffer(writer.outputStream),
+    )
+    const result = await validate(filepath)
+    const w = warnings(result).find((i) => i.type === 'incomplete_font_glyphs')
+    assert.include(w?.message, 'used by labels: 768-1023')
   })
 
   test('locally-rendered CJK/Hangul/Kana ranges are not required', async () => {
@@ -925,13 +1148,14 @@ describe('validate — glyphs (§6)', () => {
       },
     ])
     const result = await validate(filepath)
-    // Italic Font should error (zero ranges), Regular Font should warn (incomplete)
-    assert(hasError(result, 'missing_font_glyphs'))
-    const fontError = errors(result).find(
+    // Italic Font should error (zero ranges); Regular Font has the only
+    // range its labels need
+    const fontErrors = errors(result).filter(
       (i) => i.type === 'missing_font_glyphs',
     )
-    assert(fontError?.message.includes('Italic Font'))
-    assert(hasWarning(result, 'incomplete_font_glyphs'))
+    assert.equal(fontErrors.length, 1)
+    assert(fontErrors[0].message.includes('Italic Font'))
+    assert(!hasWarning(result, 'incomplete_font_glyphs'))
   })
 })
 

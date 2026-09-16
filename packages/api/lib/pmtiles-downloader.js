@@ -167,6 +167,7 @@ function singleChunkStream(data) {
  * @param {number} [opts.bufferTiles=0] Number of extra tile rings to download around the bounds at each zoom level below maxzoom, to ensure tiles are not missed at the edges.
  * @param {number} [opts.minzoom=0] Minimum zoom level to download
  * @param {number} [opts.concurrency=8] Number of concurrent tile reads
+ * @param {(data: Uint8Array) => void} [opts.onTileData] Called with the uncompressed data of each MVT tile. An error thrown by the callback ends the iteration
  * @returns {TileDownloadGenerator}
  */
 export function downloadPmtilesTiles({
@@ -180,6 +181,7 @@ export function downloadPmtilesTiles({
   bufferTiles = 0,
   minzoom = 0,
   concurrency = 8,
+  onTileData,
 }) {
   /** @type {Array<TileInfo & { error?: Error }>} */
   const skipped = []
@@ -246,6 +248,7 @@ export function downloadPmtilesTiles({
         onprogress(stats)
         let stream = singleChunkStream(data)
         if (format === 'mvt') {
+          onTileData?.(data)
           // SMP stores MVT gzip-compressed; `getZxy` returns it decompressed.
           stream = stream.pipeThrough(
             /** @type {TransformStream<Uint8Array, Uint8Array>} */ (

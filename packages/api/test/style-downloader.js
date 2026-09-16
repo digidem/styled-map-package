@@ -1,4 +1,4 @@
-import { afterAll, assert, beforeAll, describe, test } from 'vitest'
+import { afterAll, assert, beforeAll, describe, expect, test } from 'vitest'
 
 import { createServer as createHTTPServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
@@ -230,6 +230,32 @@ describe('StyleDownloader with demotiles-z2', () => {
     },
   )
 
+  test('getGlyphs({ ranges }) only downloads the given ranges', async () => {
+    const downloader = new StyleDownloader(server.baseUrl + 'style.json')
+    /** @type {import('../lib/style-downloader.js').GlyphDownloadStats | undefined} */
+    let lastProgress
+    const ranges = []
+    for await (const [stream, { range }] of downloader.getGlyphs({
+      ranges: [0x0400, 0, 0x4e00, 0],
+      skipLocalGlyphs: true,
+      onprogress: (stats) => (lastProgress = { ...stats }),
+    })) {
+      await streamToBuffer(stream)
+      ranges.push(range)
+    }
+    assert.deepEqual(ranges, ['0-255', '1024-1279'])
+    assert.equal(lastProgress?.total, 2)
+  })
+
+  test('getGlyphs({ ranges }) rejects invalid range starts', async () => {
+    const downloader = new StyleDownloader(server.baseUrl + 'style.json')
+    for (const start of [100, -256, 65536, 256.5]) {
+      await expect(
+        downloader.getGlyphs({ ranges: [start] }).next(),
+      ).rejects.toThrow(RangeError)
+    }
+  })
+
   test('getGlyphs() yields nothing for style without glyphs', async () => {
     const style = {
       version: /** @type {const} */ (8),
@@ -263,6 +289,29 @@ describe('StyleDownloader with demotiles-z2', () => {
     assert(typeof collected[0].x === 'number')
     assert(typeof collected[0].y === 'number')
     assert(typeof collected[0].sourceId === 'string')
+  })
+
+  test('getTiles() calls onTileData with uncompressed vector tiles', async () => {
+    const downloader = new StyleDownloader(server.baseUrl + 'style.json')
+    /** @type {Array<{ data: Uint8Array, sourceId: string }>} */
+    const calls = []
+    const tiles = downloader.getTiles({
+      bounds: /** @type {const} */ ([-180, -85, 180, 85]),
+      maxzoom: 1,
+      onTileData: (data, sourceId) => calls.push({ data, sourceId }),
+    })
+    let count = 0
+    for await (const [stream] of tiles) {
+      await streamToBuffer(stream)
+      count++
+    }
+    assert(count > 0, 'at least one tile')
+    assert.equal(calls.length, count, 'called once per tile')
+    for (const { data, sourceId } of calls) {
+      assert.equal(sourceId, 'maplibre')
+      // Uncompressed MVT starts with a layers field (field 3, wire type 2)
+      assert.equal(data[0], 0x1a)
+    }
   })
 
   test('getTiles() exposes stats and skipped', async () => {

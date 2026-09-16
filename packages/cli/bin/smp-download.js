@@ -38,6 +38,10 @@ program
     'Skip CJK/Hangul/Kana glyph ranges rendered locally by MapLibre GL',
   )
   .option(
+    '--all-glyph-ranges',
+    'download every glyph range, not only those used by labels in the downloaded tiles',
+  )
+  .option(
     '-d, --dedupe',
     'deduplicate tiles with identical content to reduce file size',
   )
@@ -49,7 +53,16 @@ program
   .action(
     async (
       styleUrl,
-      { bbox, zoom, output, token, skipLocalGlyphs, dedupe, bufferTiles },
+      {
+        bbox,
+        zoom,
+        output,
+        token,
+        skipLocalGlyphs,
+        allGlyphRanges,
+        dedupe,
+        bufferTiles,
+      },
     ) => {
       await runDownload(
         {
@@ -59,6 +72,7 @@ program
           output,
           token,
           skipLocalGlyphs,
+          allGlyphRanges,
           dedupe,
           bufferTiles,
         },

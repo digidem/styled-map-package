@@ -35,6 +35,7 @@ import { withDownloadState } from './utils/tile-download-state.js'
 
 /** @typedef { import('ky').ResponsePromise & { body: ReadableStream<Uint8Array> } } ResponsePromise */
 /** @import { DownloadResponse } from './utils/fetch.js' */
+/** @import { GlyphRangeCollector } from './utils/glyph-ranges.js' */
 
 /**
  * @typedef {object} GlyphDownloadStats
@@ -219,9 +220,8 @@ export class StyleDownloader {
   /**
    * Download all the glyphs for the fonts used in this style. When font stacks
    * are used in the style.json (e.g. lists of prefered fonts like with CSS),
-   * then the first font in the stack is downloaded. Defaults to downloading all
-   * UTF character ranges, which may be overkill for some styles. TODO: add more
-   * options here.
+   * then the first font in the stack is downloaded. Downloads all glyph ranges
+   * unless `ranges` is given.
    *
    * Returns an async generator of readable streams of glyph data and glyph info
    * objects.
@@ -229,12 +229,14 @@ export class StyleDownloader {
    * @param {object} opts
    * @param {(progress: GlyphDownloadStats) => void} [opts.onprogress]
    * @param {boolean} [opts.skipLocalGlyphs] Skip glyph ranges rendered client-side by MapLibre GL via localIdeographFontFamily (CJK, Hangul, Kana, Yi, etc.)
+   * @param {Iterable<number>} [opts.ranges] Start codepoints of the glyph ranges to download (multiples of 256), e.g. from {@link GlyphRangeCollector}
    * @param {AbortSignal} [opts.signal] Stop issuing downloads once aborted
    * @returns {AsyncGenerator<[ReadableStream<Uint8Array>, GlyphInfo]>}
    */
   async *getGlyphs({
     onprogress = noop,
     skipLocalGlyphs = false,
+    ranges,
     signal,
   } = {}) {
     const style = await this.getStyle()
@@ -269,9 +271,22 @@ export class StyleDownloader {
       return []
     })
     const glyphUrl = normalizeGlyphsURL(style.glyphs, this.#mapboxAccessToken)
+    const rangeStarts = ranges
+      ? [...new Set(ranges)].sort((a, b) => a - b)
+      : Array.from({ length: 256 }, (_, i) => i * 256)
+    for (const start of rangeStarts) {
+      if (
+        !Number.isInteger(start) ||
+        start % 256 ||
+        start < 0 ||
+        start > 0xff00
+      ) {
+        throw new RangeError(`Invalid glyph range start: ${start}`)
+      }
+    }
 
     for (const [font, fontStack] of fontStacks.entries()) {
-      for (let i = 0; i < Math.pow(2, 16); i += 256) {
+      for (const i of rangeStarts) {
         if (skipLocalGlyphs && isLocallyRenderedRange(i)) continue
         /** @type {GlyphRange} */
         const range = `${i}-${i + 255}`
@@ -323,6 +338,7 @@ export class StyleDownloader {
    * @param {number} [opts.bufferTiles=0] Number of extra tile rings to download around the bounds at each zoom level below maxzoom, so the map is not clipped at the edges of the downloaded area when zooming out.
    * @param {boolean} [opts.trackErrors=false] Include errors in the returned array of skipped tiles - this has memory overhead so should only be used for debugging.
    * @param {AbortSignal} [opts.signal] Stop issuing downloads once aborted
+   * @param {(data: Uint8Array, sourceId: string) => void} [opts.onTileData] Called with the uncompressed data of each MVT tile once it has been read, e.g. for {@link GlyphRangeCollector#addTile}. An error thrown by the callback fails that tile
    * @returns {import('./tile-downloader.js').TileDownloadGenerator<TileInfo>}
    */
   getTiles({
@@ -332,6 +348,7 @@ export class StyleDownloader {
     bufferTiles = 0,
     trackErrors = false,
     signal,
+    onTileData,
   }) {
     const _this = this
     /** @type {Array<TileInfo & { error?: Error }>} */
@@ -364,6 +381,9 @@ export class StyleDownloader {
             stats = addStats(statsBaseline, sourceStats)
             onprogress(stats)
           }
+          const onSourceTileData =
+            onTileData &&
+            ((/** @type {Uint8Array} */ data) => onTileData(data, sourceId))
           const pmtilesHandle = _this.#pmtilesSources.get(sourceId)
           const sourceTiles = pmtilesHandle
             ? downloadPmtilesTiles({
@@ -377,6 +397,7 @@ export class StyleDownloader {
                 concurrency: _this.#concurrency,
                 onprogress: onSourceProgress,
                 trackErrors,
+                onTileData: onSourceTileData,
               })
             : downloadTiles({
                 tileUrls: source.tiles,
@@ -390,6 +411,7 @@ export class StyleDownloader {
                 onprogress: onSourceProgress,
                 trackErrors,
                 signal,
+                onTileData: onSourceTileData,
               })
           for await (const [tileDataStream, tileInfo] of sourceTiles) {
             yield [tileDataStream, { ...tileInfo, sourceId }]

@@ -47,6 +47,7 @@ import { withDownloadState } from './utils/tile-download-state.js'
  * @param {FetchQueue} [opts.fetchQueue=new FetchQueue(concurrency)] Optional fetch queue to use for downloading tiles
  * @param {'xyz' | 'tms'} [opts.scheme='xyz'] Tile scheme to use for tile URLs
  * @param {AbortSignal} [opts.signal] Stop issuing downloads once aborted
+ * @param {(data: Uint8Array) => void} [opts.onTileData] Called with the uncompressed data of each MVT tile once it has been read by the consumer. An error thrown by the callback fails that tile
  * @returns {TileDownloadGenerator}
  */
 export function downloadTiles({
@@ -62,6 +63,7 @@ export function downloadTiles({
   fetchQueue = new FetchQueue(concurrency),
   scheme = 'xyz',
   signal,
+  onTileData,
 }) {
   /** @type {Array<TileInfo & { error?: Error }>} */
   const skipped = []
@@ -149,6 +151,9 @@ export function downloadTiles({
               ? new CompressionStream('gzip')
               : new TransformStream()
           )
+        if (format === 'mvt' && onTileData) {
+          body = body.pipeThrough(tapStream(onTileData))
+        }
         body.pipeTo(transform.writable).then(onDownloadComplete, (err) => {
           if (!signal?.aborted) onDownloadError(err, tileInfo)
         })
@@ -161,6 +166,50 @@ export function downloadTiles({
   return withDownloadState(tiles, {
     skipped: () => skipped,
     stats: () => stats,
+  })
+}
+
+/**
+ * Pass chunks through unchanged and call `ondata` with all of them once the
+ * stream has ended.
+ *
+ * @param {(data: Uint8Array) => void} ondata
+ * @returns {TransformStream<Uint8Array, Uint8Array>}
+ */
+function tapStream(ondata) {
+  /** @type {Uint8Array[]} */
+  const chunks = []
+  let length = 0
+  return new TransformStream({
+    transform(chunk, controller) {
+      chunks.push(chunk)
+      length += chunk.byteLength
+      controller.enqueue(chunk)
+    },
+    async flush() {
+      let data = chunks.length === 1 ? chunks[0] : new Uint8Array(length)
+      if (chunks.length !== 1) {
+        let offset = 0
+        for (const chunk of chunks) {
+          data.set(chunk, offset)
+          offset += chunk.byteLength
+        }
+      }
+      // Some servers send gzipped tiles without a Content-Encoding header
+      if (data[0] === 0x1f && data[1] === 0x8b) {
+        const decompressed = new Blob([
+          /** @type {Uint8Array<ArrayBuffer>} */ (data),
+        ])
+          .stream()
+          .pipeThrough(new DecompressionStream('gzip'))
+        try {
+          data = new Uint8Array(await new Response(decompressed).arrayBuffer())
+        } catch {
+          // Leave the data as-is, for the consumer to handle
+        }
+      }
+      ondata(data)
+    },
   })
 }
 
