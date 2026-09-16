@@ -915,4 +915,5 @@ test('fallbackGlyph receives the package style', async () => {
   )
   assert.equal(await response.text(), 'fallback glyph')
   assert.deepEqual(receivedStyle, await reader.getStyle())
+  assert(Object.isFrozen(receivedStyle), 'style is read-only')
 })
