@@ -1,5 +1,21 @@
 # styled-map-package
 
+## 6.1.0
+
+### Minor Changes
+
+- [#127](https://github.com/digidem/styled-map-package/pull/127) [`7678a5e`](https://github.com/digidem/styled-map-package/commit/7678a5ec2fff85ee845cd65c57cade8a9e5fa2e1) Thanks [@gmaclennan](https://github.com/gmaclennan)! - `download()` now only downloads the glyph ranges needed for labels in the downloaded tiles, which can cut glyph data by more than half, and marks the package with `metadata['smp:glyphRanges']: 'used'`. Pass `allGlyphRanges: true` (or `--all-glyph-ranges` on the CLI) to download every range as before. Adds `GlyphRangeCollector`, a `ranges` option to `StyleDownloader#getGlyphs()` and an `onTileData` option to `getTiles()`, `downloadTiles()` and `downloadPmtilesTiles()`.
+
+  Custom `fallbackGlyph` handlers now receive the package style as a third argument, e.g. to handle missing ranges in packages marked with `smp:glyphRanges: 'used'`. Adds `Writer#setMetadata()`.
+
+  `validate()` now reads the vector tiles and GeoJSON in a package and only warns about missing glyph ranges (`incomplete_font_glyphs`) that labels actually use, instead of requiring every range. Pass `glyphCoverage: false` (or `smp validate --no-glyph-coverage`) to skip reading tiles. `validate()` also no longer throws on packages written with `dedupe: true`.
+
+### Patch Changes
+
+- [#129](https://github.com/digidem/styled-map-package/pull/129) [`d987053`](https://github.com/digidem/styled-map-package/commit/d9870532699371eee439c3f0e82db5c5b4ea8e3f) Thanks [@gmaclennan](https://github.com/gmaclennan)! - Limit the total amount of tile and GeoJSON data `validate()` decompresses for the glyph coverage check, so small archives that expand hugely can't make it run for hours. Download every glyph range for vector sources that are not MVT, which can't be scanned. The style passed to `fallbackGlyph` is now shared and frozen rather than copied for every request, and its documentation no longer describes a 404 default.
+- Updated dependencies [[`d987053`](https://github.com/digidem/styled-map-package/commit/d9870532699371eee439c3f0e82db5c5b4ea8e3f), [`7678a5e`](https://github.com/digidem/styled-map-package/commit/7678a5ec2fff85ee845cd65c57cade8a9e5fa2e1)]:
+  - styled-map-package-api@6.1.0
+
 ## 6.0.1
 
 ### Patch Changes
