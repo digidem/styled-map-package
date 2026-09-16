@@ -157,7 +157,7 @@ const server = createServer()
 import { download } from 'styled-map-package-api/download'
 
 const stream = download({
-  styleUrl: 'https://demotiles.maplibre.org/style.json',
+  style: 'https://demotiles.maplibre.org/style.json',
   bbox: [-180, -80, 180, 80],
   maxzoom: 5,
   skipLocalGlyphs: true,
@@ -168,17 +168,17 @@ const stream = download({
 
 **Options:**
 
-| Option              | Type        | Description                                                                         |
-| ------------------- | ----------- | ----------------------------------------------------------------------------------- |
-| `styleUrl`          | `string`    | URL of the map style to download (required)                                         |
-| `bbox`              | `BBox`      | Bounding box `[west, south, east, north]` for tile download (required)              |
-| `maxzoom`           | `number`    | Maximum zoom level to download (required)                                           |
-| `mapboxAccessToken` | `string?`   | Mapbox access token (required for Mapbox styles)                                    |
-| `skipLocalGlyphs`   | `boolean?`  | Skip CJK/Hangul/Kana glyph ranges rendered client-side by MapLibre GL               |
-| `allGlyphRanges`    | `boolean?`  | Download every glyph range, not only those used by labels in the downloaded tiles   |
-| `dedupe`            | `boolean?`  | Store duplicate tiles only once to reduce file size                                 |
-| `bufferTiles`       | `number?`   | Extra tile rings to download around `bbox` at each zoom below maxzoom (default `0`) |
-| `onprogress`        | `function?` | Callback receiving a `DownloadProgress` object (see below)                          |
+| Option              | Type                           | Description                                                                         |
+| ------------------- | ------------------------------ | ----------------------------------------------------------------------------------- |
+| `style`             | `string \| StyleSpecification` | URL of the map style to download, or a style object (required)                      |
+| `bbox`              | `BBox`                         | Bounding box `[west, south, east, north]` for tile download (required)              |
+| `maxzoom`           | `number`                       | Maximum zoom level to download (required)                                           |
+| `mapboxAccessToken` | `string?`                      | Mapbox access token (required for Mapbox styles)                                    |
+| `skipLocalGlyphs`   | `boolean?`                     | Skip CJK/Hangul/Kana glyph ranges rendered client-side by MapLibre GL               |
+| `allGlyphRanges`    | `boolean?`                     | Download every glyph range, not only those used by labels in the downloaded tiles   |
+| `dedupe`            | `boolean?`                     | Store duplicate tiles only once to reduce file size                                 |
+| `bufferTiles`       | `number?`                      | Extra tile rings to download around `bbox` at each zoom below maxzoom (default `0`) |
+| `onprogress`        | `function?`                    | Callback receiving a `DownloadProgress` object (see below)                          |
 
 The `skipLocalGlyphs` option skips downloading glyph ranges that MapLibre GL renders client-side via [`localIdeographFontFamily`](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/) (CJK, Hangul, Kana, Yi, and Halfwidth/Fullwidth Forms — 163 of 256 ranges). This significantly reduces download size for styles that use these scripts.
 

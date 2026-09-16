@@ -188,7 +188,7 @@ export async function runDownload(
   const readStream = download({
     bbox,
     maxzoom: zoom,
-    styleUrl,
+    style: styleUrl,
     onprogress: (/** @type {any} */ p) => reporter.write(p),
     mapboxAccessToken: token,
     skipLocalGlyphs,
