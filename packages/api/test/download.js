@@ -61,6 +61,50 @@ describe('download with demotiles-z2 (glyphs, no sprites)', () => {
     await reader.close()
   })
 
+  test('download accepts a style object', async () => {
+    const response = await fetch(server.baseUrl + 'style.json')
+    const inputStyle = await response.json()
+    const inputStyleCopy = structuredClone(inputStyle)
+
+    const smp = await streamToBuffer(
+      download({
+        style: inputStyle,
+        bbox: [-180, -85, 180, 85],
+        maxzoom: 1,
+      }),
+    )
+    expect(inputStyle, 'input style is not mutated').toEqual(inputStyleCopy)
+
+    const zip = await ZipReader.from(new BufferSource(smp))
+    expect((await validate(zip)).valid).toBe(true)
+    const reader = new Reader(zip)
+    onTestFinished(() => reader.close())
+    const style = await reader.getStyle()
+    assert.deepEqual(
+      style.layers.map((l) => l.id),
+      inputStyle.layers.map((/** @type {{ id: string }} */ l) => l.id),
+    )
+    assert.equal(style.metadata['smp:glyphRanges'], 'used')
+  })
+
+  test('download accepts a style URL via the style option', async () => {
+    const smp = await streamToBuffer(
+      download({
+        style: server.baseUrl + 'style.json',
+        bbox: [-180, -85, 180, 85],
+        maxzoom: 0,
+      }),
+    )
+    const zip = await ZipReader.from(new BufferSource(smp))
+    expect((await validate(zip)).valid).toBe(true)
+  })
+
+  test('download throws when no style is given', () => {
+    expect(() =>
+      download(/** @type {any} */ ({ bbox: [-180, -85, 180, 85], maxzoom: 0 })),
+    ).toThrow(TypeError)
+  })
+
   test('download output contains readable tiles', async () => {
     const smpStream = download({
       styleUrl: server.baseUrl + 'style.json',

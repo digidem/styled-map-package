@@ -4,6 +4,8 @@ import { noop } from './utils/misc.js'
 import { readableFromAsync } from './utils/streams.js'
 import { Writer } from './writer.js'
 
+/** @import { StyleSpecification } from '@maplibre/maplibre-gl-style-spec' */
+
 /**
  * @typedef {object} DownloadProgress
  * @property {import('./tile-downloader.js').TileDownloadStats & { done: boolean }} tiles
@@ -22,7 +24,8 @@ import { Writer } from './writer.js'
  * @param {object} opts
  * @param {Readonly<import("./utils/geo.js").BBox>} opts.bbox Bounding box to download tiles for
  * @param {number} opts.maxzoom Max zoom level to download tiles for
- * @param {string} opts.styleUrl URL of the style to download
+ * @param {string | StyleSpecification} [opts.style] URL of the style to download, or a style object
+ * @param {string} [opts.styleUrl] Deprecated: use `style`
  * @param { (progress: DownloadProgress) => void } [opts.onprogress] Optional callback for reporting progress
  * @param {string} [opts.mapboxAccessToken]
  * @param {boolean} [opts.skipLocalGlyphs] Skip glyph ranges rendered client-side by MapLibre GL via localIdeographFontFamily (CJK, Hangul, Kana, Yi, etc.)
@@ -35,6 +38,7 @@ import { Writer } from './writer.js'
 export function download({
   bbox,
   maxzoom,
+  style: styleInput,
   styleUrl,
   onprogress,
   mapboxAccessToken,
@@ -44,6 +48,8 @@ export function download({
   bufferTiles = 0,
   signal: signalExt,
 }) {
+  const styleSource = styleInput ?? styleUrl
+  if (!styleSource) throw new TypeError('download() requires a style')
   /** @type {ReadableStreamDefaultReader<Uint8Array> | undefined} */
   let outputReader
   /** @type {Promise<void> | undefined} */
@@ -80,7 +86,7 @@ export function download({
         )
       }
 
-      const downloader = new StyleDownloader(styleUrl, {
+      const downloader = new StyleDownloader(styleSource, {
         concurrency: 24,
         mapboxAccessToken,
       })
