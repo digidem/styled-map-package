@@ -15,10 +15,15 @@ const SUPPORTED_MAJOR_VERSIONS = [1]
 
 const DEFAULT_MAX_ENTRIES = 500_000
 
-// Label data larger than this is not read for the glyph coverage check, which
-// then requires every glyph range. Limits memory use on untrusted archives.
+// Limits on label data read for the glyph coverage check, which requires every
+// glyph range once one is reached. Untrusted archives can hold data that
+// decompresses to far more than its size, so besides per-file limits, the
+// total decompressed size may only exceed a fixed allowance by a multiple of
+// the archive bytes read.
 const MAX_TILE_BYTES = 16 * 1024 * 1024
 const MAX_GEOJSON_BYTES = 64 * 1024 * 1024
+const BASE_READ_BUDGET = 64 * 1024 * 1024
+const MAX_EXPANSION = 32
 
 const sm = new SphericalMercator({ size: 256 })
 
@@ -718,6 +723,7 @@ async function collectUsedGlyphRanges(style, entries) {
       labelSourceIds.add(layer.source)
     }
   }
+  const budget = new ReadBudget()
   /** @type {Record<string, any>} */
   const sources = {}
   let geojsonReadFailed = false
@@ -735,10 +741,7 @@ async function collectUsedGlyphRanges(style, entries) {
       continue
     }
     try {
-      if (dataEntry.uncompressedSize > MAX_GEOJSON_BYTES) {
-        throw new Error('GeoJSON data too large')
-      }
-      const data = await readLimited(dataEntry.readable(), MAX_GEOJSON_BYTES)
+      const data = await budget.read(dataEntry, MAX_GEOJSON_BYTES)
       sources[sourceId] = { ...src, data: JSON.parse(textDecoder.decode(data)) }
     } catch {
       geojsonReadFailed = true
@@ -770,7 +773,7 @@ async function collectUsedGlyphRanges(style, entries) {
       if (seenOffsets.has(entry.fileHeaderOffset)) continue
       seenOffsets.add(entry.fileHeaderOffset)
       try {
-        collector.addTile(await readTileData(entry), sourceId)
+        collector.addTile(await budget.read(entry, MAX_TILE_BYTES), sourceId)
       } catch {
         collector.setNeedsAllRanges()
       }
@@ -788,23 +791,31 @@ function tileTemplateToRegExp(template) {
   return new RegExp(`^${escaped.replace(/\{[zxy]\}/g, '\\d+')}$`)
 }
 
-/**
- * Read a vector tile entry, decompressing it if it is gzipped. Throws for
- * tiles larger than `MAX_TILE_BYTES`.
- *
- * @param {import('@gmaclennan/zip-reader').ZipEntry} entry
- * @returns {Promise<Uint8Array>}
- */
-async function readTileData(entry) {
-  if (entry.uncompressedSize > MAX_TILE_BYTES) {
-    throw new Error('Tile too large')
+class ReadBudget {
+  #remaining = BASE_READ_BUDGET
+
+  /**
+   * Read a ZIP entry, decompressing it if it is gzipped. Throws if the data
+   * exceeds `maxBytes` or the remaining budget.
+   *
+   * @param {import('@gmaclennan/zip-reader').ZipEntry} entry
+   * @param {number} maxBytes
+   * @returns {Promise<Uint8Array>}
+   */
+  async read(entry, maxBytes) {
+    this.#remaining += MAX_EXPANSION * entry.compressedSize
+    const limit = Math.min(maxBytes, this.#remaining)
+    if (entry.uncompressedSize > limit) throw new Error('Data too large')
+    let data = await readLimited(entry.readable(), limit)
+    if (data[0] === 0x1f && data[1] === 0x8b) {
+      const decompressed = new Blob([data])
+        .stream()
+        .pipeThrough(new DecompressionStream('gzip'))
+      data = await readLimited(decompressed, limit)
+    }
+    this.#remaining -= data.byteLength
+    return data
   }
-  const data = await readLimited(entry.readable(), MAX_TILE_BYTES)
-  if (data[0] !== 0x1f || data[1] !== 0x8b) return data
-  const decompressed = new Blob([data])
-    .stream()
-    .pipeThrough(new DecompressionStream('gzip'))
-  return readLimited(decompressed, MAX_TILE_BYTES)
 }
 
 /**

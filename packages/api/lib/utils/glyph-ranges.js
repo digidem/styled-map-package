@@ -123,6 +123,10 @@ export class GlyphRangeCollector {
       /** @type {Set<string> | null} */
       let keys = analysis.keys
       if (source?.type === 'vector') {
+        if (source.encoding !== undefined && source.encoding !== 'mvt') {
+          // Only MVT tiles can be scanned
+          this.#needsAllRanges = true
+        }
         const sourceLayer = layer['source-layer']
         if (sourceLayer === undefined) continue
         const promoteId =

@@ -54,7 +54,7 @@ The `Writer` constructor takes a [MapLibre style](https://maplibre.org/maplibre-
 
   > **Warning:** This deduplication technique causes a mismatch between the filename stored in the local file header and the filename in the aliased central directory entries. While the ZIP specification does not forbid this, many general-purpose ZIP tools do not handle it correctly. macOS Finder fails to expand such archives, Info-ZIP `unzip` emits warnings, and strict readers such as `yauzl` (Node.js) and Go's `archive/zip` may reject the entries. Writers that need the resulting archive to be compatible with general-purpose ZIP tools SHOULD NOT use this technique.
 
-Sources are added implicitly when tiles are added via `addTile()`. Use `createTileWriteStream()` and `createGlyphWriteStream()` for concurrent writes.
+Sources are added implicitly when tiles are added via `addTile()`. Use `createTileWriteStream()` and `createGlyphWriteStream()` for concurrent writes. Call `setMetadata(key, value)` before `finish()` to set a property of the output style's `metadata`.
 
 ### Serving over HTTP
 
@@ -182,7 +182,29 @@ const stream = download({
 
 The `skipLocalGlyphs` option skips downloading glyph ranges that MapLibre GL renders client-side via [`localIdeographFontFamily`](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/) (CJK, Hangul, Kana, Yi, and Halfwidth/Fullwidth Forms — 163 of 256 ranges). This significantly reduces download size for styles that use these scripts.
 
-By default only the glyph ranges needed for labels are downloaded, and the package is marked with `metadata['smp:glyphRanges']: 'used'`. While tiles download, the text in each vector tile is scanned for the properties used by the style's `text-field` expressions, and only the Unicode ranges that appear (plus range 0-255, and ranges MapLibre needs for Arabic shaping and vertical CJK punctuation) are fetched for each font. Set `allGlyphRanges: true` to download every range, e.g. if the package's style may later be edited to show other properties.
+By default only the glyph ranges needed for labels are downloaded, and the package is marked with `metadata['smp:glyphRanges']: 'used'`. While tiles download, the text in each vector tile is scanned for the properties used by the style's `text-field` expressions, and only the Unicode ranges that appear are fetched for each font. Range 0-255 is always included, along with the ranges MapLibre needs when it transforms text: upper- and lower-case forms (`text-transform`, `upcase`, `downcase`), Arabic presentation forms, vertical punctuation, and the digits and separators `number-format` produces. If the needed ranges can't be determined (e.g. a tile can't be parsed, a source is not MVT, or `number-format` shows a currency), every range is downloaded. Set `allGlyphRanges: true` to always download every range, e.g. if the package's style may later be edited to show other properties.
+
+To do the same with the lower-level APIs, scan tiles with a `GlyphRangeCollector` (exported from the main entry) and pass its ranges to `getGlyphs()`:
+
+```js
+import { GlyphRangeCollector, StyleDownloader } from 'styled-map-package-api'
+
+const downloader = new StyleDownloader(styleUrl)
+const collector = new GlyphRangeCollector(await downloader.getStyle())
+const tiles = downloader.getTiles({
+  bounds,
+  maxzoom,
+  // Called with each uncompressed vector tile once it has been read
+  onTileData: (data, sourceId) => collector.addTile(data, sourceId),
+})
+// ...read every tile stream to the end, then:
+const glyphs = downloader.getGlyphs({
+  // `null` means every range is needed
+  ranges: collector.getRanges() ?? undefined,
+})
+```
+
+`downloadTiles()` also accepts `onTileData` (called with the tile data only). `getRanges()` returns the start codepoints of the needed ranges (multiples of 256).
 
 The `bufferTiles` option downloads extra tile rings around `bbox` at every zoom level below maxzoom so the map is not clipped at the edges of the downloaded area when zooming out (a single source `bounds` rectangle cannot describe a per-zoom buffer). The buffer is not added at maxzoom. When non-zero it is recorded in the package as `metadata['smp:bufferTiles']`, which `createServer`'s [`expandBounds`](#rendering-buffer-tiles-expandbounds) option can use to render those tiles.
 
@@ -226,19 +248,19 @@ const stream = fromMBTiles(buffer)
 
 ### Exports
 
-| Export path                               | Description                                                       |
-| ----------------------------------------- | ----------------------------------------------------------------- |
-| `styled-map-package-api`                  | Main entry — `Reader`, `Writer`, `createServer`, `download`, etc. |
-| `styled-map-package-api/reader`           | `Reader` class for reading `.smp` files                           |
-| `styled-map-package-api/writer`           | `Writer` class for creating `.smp` files                          |
-| `styled-map-package-api/server`           | `createServer()` — HTTP handler using WHATWG Request/Response     |
-| `styled-map-package-api/fallbacks`        | `emptyTileFallback`, `emptyGlyphFallback` — built-in fallbacks    |
-| `styled-map-package-api/download`         | `download()` — download an online map style for offline use       |
-| `styled-map-package-api/style-downloader` | `StyleDownloader` — downloads styles, sprites, and glyphs         |
-| `styled-map-package-api/tile-downloader`  | `downloadTiles()` — downloads tile data                           |
-| `styled-map-package-api/from-mbtiles`     | `fromMBTiles()` — convert MBTiles to SMP stream                   |
-| `styled-map-package-api/validator`        | `validate()` — validate `.smp` files against the spec             |
-| `styled-map-package-api/utils/mapbox`     | Mapbox URL detection and API utilities                            |
+| Export path                               | Description                                                                              |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `styled-map-package-api`                  | Main entry — `Reader`, `Writer`, `createServer`, `download`, `GlyphRangeCollector`, etc. |
+| `styled-map-package-api/reader`           | `Reader` class for reading `.smp` files                                                  |
+| `styled-map-package-api/writer`           | `Writer` class for creating `.smp` files                                                 |
+| `styled-map-package-api/server`           | `createServer()` — HTTP handler using WHATWG Request/Response                            |
+| `styled-map-package-api/fallbacks`        | `emptyTileFallback`, `emptyGlyphFallback` — built-in fallbacks                           |
+| `styled-map-package-api/download`         | `download()` — download an online map style for offline use                              |
+| `styled-map-package-api/style-downloader` | `StyleDownloader` — downloads styles, sprites, and glyphs                                |
+| `styled-map-package-api/tile-downloader`  | `downloadTiles()` — downloads tile data                                                  |
+| `styled-map-package-api/from-mbtiles`     | `fromMBTiles()` — convert MBTiles to SMP stream                                          |
+| `styled-map-package-api/validator`        | `validate()` — validate `.smp` files against the spec                                    |
+| `styled-map-package-api/utils/mapbox`     | Mapbox URL detection and API utilities                                                   |
 
 ### Validating an SMP file
 

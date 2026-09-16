@@ -444,6 +444,13 @@ describe('GlyphRangeCollector', () => {
     assert.deepEqual(collector.getRanges(), [0, 0x100, 0x300])
   })
 
+  test('returns null for vector sources that are not MVT', () => {
+    const style = makeStyle([labelLayer], {
+      vt: { type: 'vector', tiles: [], encoding: 'mlt' },
+    })
+    assert.equal(new GlyphRangeCollector(style).getRanges(), null)
+  })
+
   test('ignores a null promoteId', () => {
     const style = makeStyle([labelLayer], {
       vt: { type: 'vector', tiles: [], promoteId: null },
