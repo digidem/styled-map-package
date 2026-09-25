@@ -207,14 +207,12 @@ export class Writer {
   }
 
   #getMaxZoom() {
-    let maxzoom = 0
+    let maxzoom = -1
     for (const { source } of this.#sources.values()) {
-      const sourceMaxzoom =
-        // For GeoJSON sources, the maxzoom is 16 unless otherwise set
-        source.type === 'geojson' ? source.maxzoom || 16 : source.maxzoom
-      maxzoom = Math.max(maxzoom, sourceMaxzoom)
+      if (source.type !== 'geojson') maxzoom = Math.max(maxzoom, source.maxzoom)
     }
-    return maxzoom
+    // Spec §4.3.2: tile data sets smp:maxzoom; 16 for GeoJSON-only packages
+    return maxzoom >= 0 ? maxzoom : 16
   }
 
   /**
@@ -288,7 +286,6 @@ export class Writer {
       case 'geojson':
         smpSource = {
           ...source,
-          maxzoom: 0,
           data:
             typeof source.data !== 'string'
               ? // Add a bbox property to the GeoJSON data if it doesn't already have one
