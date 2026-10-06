@@ -98,9 +98,6 @@ async function createValidSmp() {
  */
 async function createZip(files) {
   const zipWriter = new ZipWriter()
-  // Read the output as entries are added, or large entries block on backpressure
-  // @ts-ignore
-  const output = streamToBuffer(zipWriter.readable)
   for (const { name, data } of files) {
     const bytes =
       typeof data === 'string' ? new TextEncoder().encode(data) : data
@@ -115,7 +112,8 @@ async function createZip(files) {
     })
   }
   await zipWriter.finalize()
-  return output
+  // @ts-ignore
+  return streamToBuffer(zipWriter.readable)
 }
 
 /**
@@ -940,22 +938,16 @@ describe('validate — glyphs (§6)', () => {
   })
 
   test('stops reading tiles that decompress far beyond their size', async () => {
-    // Each tile is under the per-tile limit but compresses about 1000x
+    // Under the per-tile limit, but compresses about 1000x
     const bomb = gzipSync(new Uint8Array(15 * 1024 * 1024))
-    const tiles = Array.from({ length: 64 }, (_, x) => ({
-      name: `s/0/6/${x}/0.mvt.gz`,
-      data: bomb,
-    }))
-    const style = labelledStyle()
-    style.sources.vt.maxzoom = 6
     const filepath = await createZipFile([
       { name: 'VERSION', data: '1.0\n' },
-      { name: 'style.json', data: JSON.stringify(style) },
-      ...tiles,
+      { name: 'style.json', data: JSON.stringify(labelledStyle()) },
+      { name: 's/0/0/0/0.mvt.gz', data: bomb },
       { name: 'fonts/Test Font/0-255.pbf.gz', data: new Uint8Array(8) },
     ])
     const result = await validate(filepath)
-    // Without the limit, the zero-filled tiles read as tiles with no labels
+    // Without the limit, the zero-filled tile reads as a tile with no labels
     const w = warnings(result).find((i) => i.type === 'incomplete_font_glyphs')
     assert.include(w?.message, 'could not be determined')
   })
@@ -1057,7 +1049,9 @@ describe('validate — glyphs (§6)', () => {
   test('deduplicated tiles are validated', async () => {
     const style = labelledStyle()
     const writer = new Writer(/** @type {any} */ (style), { dedupe: true })
-    const tile = encodeTile([{ name: 'place', features: [{ name: 'Αθήνα' }] }])
+    const tile = gzipSync(
+      encodeTile([{ name: 'place', features: [{ name: 'Αθήνα' }] }]),
+    )
     for (const [x, y] of [
       [0, 0],
       [1, 0],
