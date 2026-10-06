@@ -1,4 +1,3 @@
-import { ZipReader } from '@gmaclennan/zip-reader'
 import { SphericalMercator } from '@mapbox/sphericalmercator'
 import {
   expressions,
@@ -9,6 +8,7 @@ import {
 import { GlyphRangeCollector } from './utils/glyph-ranges.js'
 import { isLocallyRenderedRange } from './utils/style.js'
 import { STYLE_FILE, URI_BASE, VERSION_FILE } from './utils/templates.js'
+import { explainZipError, openZip } from './utils/zip.js'
 
 /** Major version(s) supported by this implementation */
 const SUPPORTED_MAJOR_VERSIONS = [1]
@@ -121,7 +121,9 @@ const result = (issues) => ({
  * for programmatic filtering. Use `result.valid` to check spec compliance
  * and `result.usable` to check whether the file can be opened by the reader.
  *
- * @param {string | import('@gmaclennan/zip-reader').ZipReader} source Path to the .smp file, or a ZipReader instance
+ * @param {string | import('@gmaclennan/zip-reader').RandomAccessSource | import('@gmaclennan/zip-reader').ZipReader} source
+ *   Path to the .smp file (Node.js only), a RandomAccessSource such as
+ *   `BlobSource`, or a ZipReader instance (see `Reader` for ZipReader options)
  * @param {ValidateOptions} [options]
  * @returns {Promise<ValidationResult>}
  */
@@ -142,12 +144,12 @@ export async function validate(source, options = {}) {
     if (typeof source === 'string') {
       const { FileSource } = await import('@gmaclennan/zip-reader/file-source')
       fileSource = await FileSource.open(source)
-      // Deduplicated tiles share file data, like the Reader allows
-      zip = await ZipReader.from(fileSource, { skipUniqueEntryCheck: true })
+      zip = await openZip(fileSource)
     } else {
-      zip = source
+      zip = await openZip(source)
     }
   } catch (err) {
+    if (/** @type {any} */ (err)?.code === 'ERR_INVALID_ARG_TYPE') throw err
     const message = err instanceof Error ? err.message : String(err)
     if (/** @type {any} */ (err)?.code === 'ENOENT') {
       error('file_not_found', `File not found: ${source}`)
@@ -236,7 +238,7 @@ async function buildEntryMap(zip, maxEntries, error, warn) {
       error('unsafe_entry', `ZIP contains unsafe entry: ${message}`)
       return null
     }
-    throw err
+    throw explainZipError(err)
   }
   return entries
 }

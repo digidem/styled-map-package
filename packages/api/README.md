@@ -25,12 +25,23 @@ const style = await reader.getStyle()
 await reader.close()
 ```
 
-The `Reader` constructor accepts a file path (Node.js) or a `ZipReader` instance (browser), and an optional options object:
+The `Reader` constructor accepts a file path (Node.js), a [`RandomAccessSource`](https://github.com/gmaclennan/zip-reader) such as `BlobSource` (browser), or a `ZipReader` instance, and an optional options object:
 
 - **`maxEntries`** — maximum number of ZIP entries to process (default: 500,000). Exceeding this limit throws an error to avoid DoS attacks with maliciously crafted ZIP files containing excessive entries.
 - **`maxResourceSize`** — maximum uncompressed size in bytes for a single resource (default: 20 MiB). Exceeding this limit throws an error to prevent excessive memory usage.
 
 If you pass a file path to the `Reader` constructor, it will keep the file open until you call `reader.close()`.
+
+In the browser, pass a source for the file:
+
+```js
+import { BlobSource } from '@gmaclennan/zip-reader/blob-source'
+import { Reader } from 'styled-map-package-api/reader'
+
+const reader = new Reader(new BlobSource(file))
+```
+
+If you construct the `ZipReader` yourself, open it with `{ skipUniqueEntryCheck: true }`, otherwise packages written with `dedupe: true` fail to open.
 
 ### Writing an SMP file
 
@@ -345,7 +356,7 @@ The result includes two convenience booleans:
 - **`valid`** — `true` when there are no errors (spec-compliant)
 - **`usable`** — `true` when there are no fatal issues (the file can be opened)
 
-Accepts a file path (Node.js) or a `ZipReader` instance (browser). Options:
+Accepts the same inputs as `Reader`: a file path (Node.js), a `RandomAccessSource` such as `BlobSource` (browser), or a `ZipReader` instance. Options:
 
 ```js
 const result = await validate('map.smp', {
@@ -358,7 +369,7 @@ To check glyph coverage, the validator reads every vector tile (and GeoJSON file
 
 ### Browser support
 
-All stream APIs use WHATWG `ReadableStream`, making the library compatible with both Node.js and browser environments. The `Reader` class accepts either a file path (Node.js) or a `ZipReader` instance (browser).
+All stream APIs use WHATWG `ReadableStream`, making the library compatible with both Node.js and browser environments. In the browser, pass a `RandomAccessSource` such as `BlobSource` to `Reader` instead of a file path.
 
 ## License
 

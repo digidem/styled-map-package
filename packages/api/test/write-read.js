@@ -1061,11 +1061,7 @@ test('Dedupe: duplicate tiles are stored once and read back correctly', async ()
   ).not.toBe(allOffsets[1])
 
   // Read back deduplicated SMP and verify all tiles return correct data
-  const reader = new Reader(
-    await ZipReader.from(new BufferSource(smpDedupe), {
-      skipUniqueEntryCheck: true,
-    }),
-  )
+  const reader = new Reader(new BufferSource(smpDedupe))
   const readerHelper = new ReaderHelper(reader)
 
   for (let i = 0; i < tiles.length; i++) {
@@ -1075,6 +1071,12 @@ test('Dedupe: duplicate tiles are stored once and read back correctly', async ()
       expectedHash,
     )
   }
+
+  const zipWithoutOption = await ZipReader.from(new BufferSource(smpDedupe))
+  const readerWithoutOption = new Reader(zipWithoutOption)
+  await expect(readerWithoutOption.opened()).rejects.toThrow(
+    /skipUniqueEntryCheck/,
+  )
 })
 
 test('Dedupe: no duplicates produces same result as non-dedupe', async () => {
@@ -1101,11 +1103,7 @@ test('Dedupe: no duplicates produces same result as non-dedupe', async () => {
   writer.finish()
 
   const smp = await smpPromise
-  const reader = new Reader(
-    await ZipReader.from(new BufferSource(smp), {
-      skipUniqueEntryCheck: true,
-    }),
-  )
+  const reader = new Reader(new BufferSource(smp))
   const readerHelper = new ReaderHelper(reader)
 
   for (const [tileId, expectedHash] of tileHashes) {

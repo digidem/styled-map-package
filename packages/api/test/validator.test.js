@@ -1,5 +1,5 @@
 import { temporaryWrite } from 'tempy'
-import { assert, describe, onTestFinished, test } from 'vitest'
+import { assert, describe, expect, onTestFinished, test } from 'vitest'
 import { ZipWriter } from 'zip-writer'
 
 import { randomBytes } from 'node:crypto'
@@ -66,7 +66,7 @@ function labelledStyle(tiles = ['smp://maps.v1/s/0/{z}/{x}/{y}.mvt.gz']) {
 /**
  * Create a minimal valid SMP buffer using the Writer
  */
-async function createValidSmp() {
+async function createValidSmp({ dedupe = false } = {}) {
   const style = {
     version: /** @type {const} */ (8),
     sources: {
@@ -74,20 +74,22 @@ async function createValidSmp() {
     },
     layers: [{ id: 'bg', type: /** @type {const} */ ('background') }],
   }
-  const writer = new Writer(style)
-  const readable = new ReadableStream({
-    pull(controller) {
-      controller.enqueue(randomBytes(1024))
-      controller.close()
-    },
-  })
-  await writer.addTile(readable, {
-    x: 0,
-    y: 0,
-    z: 0,
-    sourceId: 'test',
-    format: 'mvt',
-  })
+  const writer = new Writer(style, { dedupe })
+  const tile = randomBytes(1024)
+  for (const { x, y, z } of dedupe
+    ? [
+        { x: 0, y: 0, z: 0 },
+        { x: 0, y: 0, z: 1 },
+      ]
+    : [{ x: 0, y: 0, z: 0 }]) {
+    await writer.addTile(new Uint8Array(tile), {
+      x,
+      y,
+      z,
+      sourceId: 'test',
+      format: 'mvt',
+    })
+  }
   writer.finish()
   return streamToBuffer(writer.outputStream)
 }
@@ -1550,6 +1552,29 @@ describe('validate — ZipReader input', () => {
     const result = await validate(zipReader)
     assert.equal(result.valid, true)
     assert.equal(errors(result).length, 0)
+  })
+
+  test('accepts a RandomAccessSource with deduplicated tiles', async () => {
+    const smpBuf = await createValidSmp({ dedupe: true })
+    const { BufferSource } =
+      await import('@gmaclennan/zip-reader/buffer-source')
+    const result = await validate(new BufferSource(smpBuf))
+    assert.equal(result.valid, true)
+    assert.equal(errors(result).length, 0)
+  })
+
+  test('explains how to read deduplicated tiles from a ZipReader', async () => {
+    const smpBuf = await createValidSmp({ dedupe: true })
+    const { ZipReader } = await import('@gmaclennan/zip-reader')
+    const { BufferSource } =
+      await import('@gmaclennan/zip-reader/buffer-source')
+    const zipReader = await ZipReader.from(new BufferSource(smpBuf))
+    await expect(validate(zipReader)).rejects.toThrow(/skipUniqueEntryCheck/)
+  })
+
+  test('rejects an unsupported source type', async () => {
+    // @ts-expect-error
+    await expect(validate({})).rejects.toThrow(TypeError)
   })
 })
 
