@@ -556,7 +556,7 @@ describe('download glyph ranges', () => {
   })
 
   /**
-   * @param {Partial<Parameters<typeof download>[0]>} opts
+   * @param {Partial<import('../lib/download.js').DownloadOptionsBase>} opts
    */
   async function downloadGlyphs(opts) {
     /** @type {import('../lib/download.js').DownloadProgress | undefined} */

@@ -80,6 +80,19 @@ export interface ValidateStyle {
 
 export type DownloadStream = ReadableStream<Uint8Array>
 
+export type DownloadStyleOptions =
+  | {
+      /** URL of the style to download, or a style object */
+      style: string | StyleSpecification
+      /** @deprecated Use `style` */
+      styleUrl?: never
+    }
+  | {
+      /** @deprecated Use `style` */
+      styleUrl: string
+      style?: never
+    }
+
 export type RequiredUnion<T> = T extends any ? Required<T> : never
 export type OmitUnion<T, K extends keyof any> = T extends unknown
   ? Omit<T, K>

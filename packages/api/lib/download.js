@@ -4,8 +4,6 @@ import { noop } from './utils/misc.js'
 import { readableFromAsync } from './utils/streams.js'
 import { Writer } from './writer.js'
 
-/** @import { StyleSpecification } from '@maplibre/maplibre-gl-style-spec' */
-
 /**
  * @typedef {object} DownloadProgress
  * @property {import('./tile-downloader.js').TileDownloadStats & { done: boolean }} tiles
@@ -17,22 +15,28 @@ import { Writer } from './writer.js'
  */
 
 /**
+ * @typedef {object} DownloadOptionsBase
+ * @property {Readonly<import("./utils/geo.js").BBox>} bbox Bounding box to download tiles for
+ * @property {number} maxzoom Max zoom level to download tiles for
+ * @property { (progress: DownloadProgress) => void } [onprogress] Optional callback for reporting progress
+ * @property {string} [mapboxAccessToken]
+ * @property {boolean} [skipLocalGlyphs] Skip glyph ranges rendered client-side by MapLibre GL via localIdeographFontFamily (CJK, Hangul, Kana, Yi, etc.)
+ * @property {boolean} [allGlyphRanges] Download every glyph range, rather than only the ranges needed for the labels in the downloaded tiles
+ * @property {boolean} [dedupe] When true, duplicate tiles are stored only once (see {@link Writer})
+ * @property {number} [bufferTiles=0] Number of extra tile rings to download around `bbox` at each zoom level below maxzoom, so the map is not clipped at the edges of the downloaded area when zooming out. Recorded in the package as `metadata['smp:bufferTiles']`.
+ * @property {AbortSignal} [signal] AbortSignal to cancel the download. No further requests are issued once aborted; cancel the returned stream to release downloads already in progress.
+ */
+
+/**
+ * @typedef {DownloadOptionsBase & import('./types.js').DownloadStyleOptions} DownloadOptions
+ */
+
+/**
  * Download a map style and its resources for a given bounding box and max zoom
  * level. Returns a readable stream of a "styled map package", a zip file
  * containing all the resources needed to serve the style offline.
  *
- * @param {object} opts
- * @param {Readonly<import("./utils/geo.js").BBox>} opts.bbox Bounding box to download tiles for
- * @param {number} opts.maxzoom Max zoom level to download tiles for
- * @param {string | StyleSpecification} [opts.style] URL of the style to download, or a style object
- * @param {string} [opts.styleUrl] Deprecated: use `style`
- * @param { (progress: DownloadProgress) => void } [opts.onprogress] Optional callback for reporting progress
- * @param {string} [opts.mapboxAccessToken]
- * @param {boolean} [opts.skipLocalGlyphs] Skip glyph ranges rendered client-side by MapLibre GL via localIdeographFontFamily (CJK, Hangul, Kana, Yi, etc.)
- * @param {boolean} [opts.allGlyphRanges] Download every glyph range, rather than only the ranges needed for the labels in the downloaded tiles
- * @param {boolean} [opts.dedupe] When true, duplicate tiles are stored only once (see {@link Writer})
- * @param {number} [opts.bufferTiles=0] Number of extra tile rings to download around `bbox` at each zoom level below maxzoom, so the map is not clipped at the edges of the downloaded area when zooming out. Recorded in the package as `metadata['smp:bufferTiles']`.
- * @param {AbortSignal} [opts.signal] AbortSignal to cancel the download. No further requests are issued once aborted; cancel the returned stream to release downloads already in progress.
+ * @param {DownloadOptions} opts
  * @returns {import('./types.js').DownloadStream} Readable stream of the output styled map file
  */
 export function download({
