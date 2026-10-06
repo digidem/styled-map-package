@@ -148,6 +148,7 @@ export async function validate(source, options = {}) {
       zip = source
     }
   } catch (err) {
+    if (fileSource) await fileSource.close()
     const message = err instanceof Error ? err.message : String(err)
     if (/** @type {any} */ (err)?.code === 'ENOENT') {
       error('file_not_found', `File not found: ${source}`)
