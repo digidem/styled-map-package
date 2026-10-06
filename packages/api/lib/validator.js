@@ -16,8 +16,10 @@ const SUPPORTED_MAJOR_VERSIONS = [1]
 const DEFAULT_MAX_ENTRIES = 500_000
 
 // Limits on label data read for the glyph coverage check, which requires every
-// glyph range once one is reached. The expansion limit bounds the total work to
-// a multiple of the archive size, however many entries decompress hugely.
+// glyph range once one is reached. The per-file limits bound memory use.
+// Capping each entry at MAX_EXPANSION times its size in the archive caps the
+// total at MAX_EXPANSION times the archive size, so a small malicious archive
+// can't make validation run for hours.
 const MAX_TILE_BYTES = 16 * 1024 * 1024
 const MAX_GEOJSON_BYTES = 64 * 1024 * 1024
 const MAX_EXPANSION = 32
