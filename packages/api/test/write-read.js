@@ -1283,3 +1283,57 @@ function* glyphRanges(max = Math.pow(2, 16)) {
     yield `${i}-${i + 255}`
   }
 }
+
+describe('Writer after finish()', () => {
+  async function finishedWriter() {
+    const styleIn = await readJson(
+      new URL('./fixtures/valid-styles/minimal.input.json', import.meta.url),
+    )
+    const writer = new Writer(styleIn)
+    const smpPromise = streamToBuffer(writer.outputStream)
+    /** @type {import('../lib/writer.js').TileInfo} */
+    const tileInfo = { x: 0, y: 0, z: 0, sourceId: 'maplibre', format: 'mvt' }
+    await writer.addTile(randomWebStream({ size: 1024 }), tileInfo)
+    await writer.finish()
+    await smpPromise
+    return { writer, tileInfo }
+  }
+
+  test('throws when finish() is called again', async () => {
+    const { writer } = await finishedWriter()
+    await expect(writer.finish()).rejects.toThrow('already finished')
+  })
+
+  test('throws when adding resources', async () => {
+    const { writer, tileInfo } = await finishedWriter()
+    await expect(
+      writer.addTile(randomWebStream({ size: 1024 }), { ...tileInfo, z: 1 }),
+    ).rejects.toThrow('already finished')
+    await expect(
+      writer.addSprite({ json: '{}', png: new Uint8Array(1) }),
+    ).rejects.toThrow('already finished')
+    await expect(
+      writer.addGlyphs(new Uint8Array(1), { font: 'Font', range: '0-255' }),
+    ).rejects.toThrow('already finished')
+    expect(() => writer.setMetadata('key', 'value')).toThrow('already finished')
+    expect(() => writer.createTileWriteStream()).toThrow('already finished')
+    expect(() => writer.createGlyphWriteStream()).toThrow('already finished')
+  })
+
+  test('with dedupe, throws when adding a duplicate tile', async () => {
+    const styleIn = await readJson(
+      new URL('./fixtures/valid-styles/minimal.input.json', import.meta.url),
+    )
+    const writer = new Writer(styleIn, { dedupe: true })
+    const smpPromise = streamToBuffer(writer.outputStream)
+    const tile = new Uint8Array(1024)
+    /** @type {import('../lib/writer.js').TileInfo} */
+    const tileInfo = { x: 0, y: 0, z: 0, sourceId: 'maplibre', format: 'mvt' }
+    await writer.addTile(tile, tileInfo)
+    await writer.finish()
+    await smpPromise
+    await expect(writer.addTile(tile, { ...tileInfo, z: 1 })).rejects.toThrow(
+      'already finished',
+    )
+  })
+})
