@@ -178,7 +178,56 @@ const stream = download({
 | `allGlyphRanges`    | `boolean?`                     | Download every glyph range, not only those used by labels in the downloaded tiles   |
 | `dedupe`            | `boolean?`                     | Store duplicate tiles only once to reduce file size                                 |
 | `bufferTiles`       | `number?`                      | Extra tile rings to download around `bbox` at each zoom below maxzoom (default `0`) |
+| `beforeFinish`      | `function?`                    | Called with the `Writer` before the package is finished (see below)                 |
 | `onprogress`        | `function?`                    | Callback receiving a `DownloadProgress` object (see below)                          |
+
+The `beforeFinish(writer, { signal, glyphRanges })` option is called once everything has downloaded, before the package is finished, so you can add resources that aren't downloaded: sprites, tiles, glyphs or metadata. `writer` has the [`Writer`](#writing-an-smp-file) methods for adding resources (`addTile`, `addSprite`, `addGlyphs`, `setMetadata`, `createTileWriteStream` and `createGlyphWriteStream`), but not `finish()`, `abort()` or `outputStream`, which stay with `download()`; throw to fail the download. The style is still the source of truth for what the package contains, so reference those resources in the style you pass in with the package's own `smp:` URLs, which are not downloaded:
+
+| Resource | In the style                                   | In `beforeFinish`      |
+| -------- | ---------------------------------------------- | ---------------------- |
+| Sprite   | `sprite: [{ id, url: getSpriteUri(id) }]`      | `writer.addSprite()`   |
+| Tiles    | `sources: { id: { type, tiles: [TILE_URI] } }` | `writer.addTile()`     |
+| Glyphs   | `glyphs: GLYPH_URI`                            | `writer.addGlyphs()`   |
+| Metadata | —                                              | `writer.setMetadata()` |
+
+`getSpriteUri`, `TILE_URI` and `GLYPH_URI` are exported from `styled-map-package-api`. The Writer replaces any `smp:` URL with the resource's URL in the package, so only the sprite id matters. For example, to add icons for layers you added to a style object:
+
+```js
+import { download, getSpriteUri } from 'styled-map-package-api'
+
+const sprites =
+  typeof style.sprite === 'string'
+    ? [{ id: 'default', url: style.sprite }]
+    : (style.sprite ?? [])
+
+const stream = download({
+  style: {
+    ...style,
+    sprite: [...sprites, { id: 'overlays', url: getSpriteUri('overlays') }],
+  },
+  bbox,
+  maxzoom,
+  async beforeFinish(writer) {
+    await writer.addSprite({ id: 'overlays', pixelRatio: 1, json, png })
+    await writer.addSprite({
+      id: 'overlays',
+      pixelRatio: 2,
+      json: json2x,
+      png: png2x,
+    })
+  },
+})
+```
+
+Layers reference the added icons as `overlays:<name>`, while a string sprite's own icons keep their names because it becomes the `default` sprite. Add each sprite at pixel ratios 1 and 2: MapLibre requests `sprite.json` or `sprite@2x.json` depending on screen density, with no fallback.
+
+A few things to know when adding resources:
+
+- `download()` fails before downloading anything if the style has `smp:` URLs but no `beforeFinish`, e.g. a style read from an existing package. It fails after `beforeFinish` if a source with `smp:` tiles got no tiles, if a referenced sprite wasn't added, or if the style has `glyphs: GLYPH_URI` but no glyphs were added ("Missing fonts").
+- A source's `smp:` tiles URL must be its only one: `smp:` URLs mixed with other tile URLs, in a source's `url`, in a `raster-dem` source or as GeoJSON `data` are rejected. Include GeoJSON data in the style instead.
+- You can add tiles to a downloaded source too, e.g. at zoom levels above `maxzoom`, but adding a tile or glyph range that was already downloaded throws.
+- `glyphRanges` holds the start codepoints of the glyph ranges needed for the labels in the downloaded tiles, or is `undefined` if every range is needed. Use it to add only the ranges you need for fonts you provide with `GLYPH_URI`; such packages are not marked with `smp:glyphRanges`, since you choose the ranges. Tiles you add aren't scanned for labels, so every range is needed when a source with `smp:` tiles has labels. Labels in tiles you add to a downloaded source aren't covered either: set `allGlyphRanges: true` if they may use other scripts.
+- `signal` is aborted if the download is cancelled. Cancelling waits for `beforeFinish` to return, so stop any long-running work when it aborts.
 
 The `skipLocalGlyphs` option skips downloading glyph ranges that MapLibre GL renders client-side via [`localIdeographFontFamily`](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/) (CJK, Hangul, Kana, Yi, and Halfwidth/Fullwidth Forms — 163 of 256 ranges). This significantly reduces download size for styles that use these scripts.
 

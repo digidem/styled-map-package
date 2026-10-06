@@ -1,7 +1,8 @@
 import { StyleDownloader } from './style-downloader.js'
 import { GlyphRangeCollector } from './utils/glyph-ranges.js'
 import { noop } from './utils/misc.js'
-import { readableFromAsync } from './utils/streams.js'
+import { readableFromAsync, writeStreamFromAsync } from './utils/streams.js'
+import { isProvidedByCaller } from './utils/templates.js'
 import { Writer } from './writer.js'
 
 /**
@@ -15,6 +16,19 @@ import { Writer } from './writer.js'
  */
 
 /**
+ * The {@link Writer} methods available to `beforeFinish`. Finishing and the
+ * output stream stay with `download()`.
+ *
+ * @typedef {Pick<Writer, 'addTile' | 'addSprite' | 'addGlyphs' | 'setMetadata' | 'createTileWriteStream' | 'createGlyphWriteStream'>} BeforeFinishWriter
+ */
+
+/**
+ * @typedef {object} BeforeFinishContext
+ * @property {AbortSignal} signal Aborted when the download is cancelled
+ * @property {number[] | undefined} glyphRanges Start codepoints of the glyph ranges needed for the labels in the downloaded tiles, or `undefined` if every range is needed. Always `undefined` when a source with `smp:` tiles has labels, since tiles added in `beforeFinish` are not scanned.
+ */
+
+/**
  * @typedef {object} DownloadOptionsBase
  * @property {Readonly<import("./utils/geo.js").BBox>} bbox Bounding box to download tiles for
  * @property {number} maxzoom Max zoom level to download tiles for
@@ -24,6 +38,7 @@ import { Writer } from './writer.js'
  * @property {boolean} [allGlyphRanges] Download every glyph range, rather than only the ranges needed for the labels in the downloaded tiles
  * @property {boolean} [dedupe] When true, duplicate tiles are stored only once (see {@link Writer})
  * @property {number} [bufferTiles=0] Number of extra tile rings to download around `bbox` at each zoom level below maxzoom, so the map is not clipped at the edges of the downloaded area when zooming out. Recorded in the package as `metadata['smp:bufferTiles']`.
+ * @property {(writer: BeforeFinishWriter, context: BeforeFinishContext) => void | Promise<void>} [beforeFinish] Called once everything is downloaded, before the package is finished, to add resources that the style references by `smp://` URL, which are not downloaded. Throw to fail the download.
  * @property {AbortSignal} [signal] AbortSignal to cancel the download. No further requests are issued once aborted; cancel the returned stream to release downloads already in progress.
  */
 
@@ -44,6 +59,7 @@ export function download({
   maxzoom,
   style: styleInput,
   styleUrl,
+  beforeFinish,
   onprogress,
   mapboxAccessToken,
   skipLocalGlyphs,
@@ -96,6 +112,12 @@ export function download({
       })
 
       const style = await downloader.getStyle()
+      const provided = getProvidedResources(style)
+      if (!beforeFinish && provided.descriptions.length > 0) {
+        throw new Error(
+          `The style references ${provided.descriptions.join(', ')} with smp: URLs, which are not downloaded: add them with beforeFinish`,
+        )
+      }
       handleProgress({ style: { done: true } })
 
       const writer = new Writer(style, { dedupe: !!dedupe })
@@ -117,6 +139,10 @@ export function download({
           const glyphRanges = allGlyphRanges
             ? undefined
             : new GlyphRangeCollector(style)
+          // Tiles added in beforeFinish are not scanned for label text
+          if (provided.sourceIds.some((id) => glyphRanges?.wantsTile(id))) {
+            glyphRanges?.setNeedsAllRanges()
+          }
           const tiles = downloader.getTiles({
             bounds: bbox,
             maxzoom,
@@ -135,7 +161,7 @@ export function download({
           handleProgress({ tiles: { ...progress.tiles, done: true } })
 
           const ranges = glyphRanges?.getRanges() ?? undefined
-          if (ranges && style.glyphs) {
+          if (ranges && style.glyphs && !provided.glyphs) {
             writer.setMetadata('smp:glyphRanges', 'used')
           }
           const glyphs = downloader.getGlyphs({
@@ -151,6 +177,23 @@ export function download({
           )
           handleProgress({ glyphs: { ...progress.glyphs, done: true } })
 
+          if (beforeFinish) {
+            /** @type {Set<string>} */
+            const addedSourceIds = new Set()
+            await beforeFinish(toBeforeFinishWriter(writer, addedSourceIds), {
+              signal,
+              glyphRanges: ranges,
+            })
+            const missing = provided.sourceIds.filter(
+              (id) => !addedSourceIds.has(id),
+            )
+            if (missing.length > 0) {
+              throw new Error(
+                `beforeFinish added no tiles for ${missing.map((id) => `source "${id}"`).join(', ')}, which the style references with smp: tiles`,
+              )
+            }
+          }
+          signal.throwIfAborted()
           await writer.finish()
         } catch (err) {
           try {
@@ -191,4 +234,56 @@ export function download({
       await downloadDone
     },
   })
+}
+
+/**
+ * Resources that the style references with `smp:` URLs, which the caller adds
+ * in `beforeFinish` rather than them being downloaded.
+ *
+ * @param {Awaited<ReturnType<StyleDownloader['getStyle']>>} style
+ */
+function getProvidedResources(style) {
+  const sprites =
+    typeof style.sprite === 'string'
+      ? [{ id: 'default', url: style.sprite }]
+      : (style.sprite ?? [])
+  const sourceIds = Object.entries(style.sources)
+    .filter(
+      ([, source]) =>
+        (source.type === 'vector' || source.type === 'raster') &&
+        isProvidedByCaller(source.tiles),
+    )
+    .map(([id]) => id)
+  const spriteIds = sprites
+    .filter(({ url }) => isProvidedByCaller(url))
+    .map(({ id }) => id)
+  const glyphs = isProvidedByCaller(style.glyphs)
+  const descriptions = [
+    ...sourceIds.map((id) => `source "${id}"`),
+    ...spriteIds.map((id) => `sprite "${id}"`),
+    ...(glyphs ? ['glyphs'] : []),
+  ]
+  return { sourceIds, glyphs, descriptions }
+}
+
+/**
+ * @param {Writer} writer
+ * @param {Set<string>} addedSourceIds Updated with the source of each tile added
+ * @returns {BeforeFinishWriter}
+ */
+function toBeforeFinishWriter(writer, addedSourceIds) {
+  /** @type {Writer['addTile']} */
+  const addTile = async (tileData, tileInfo) => {
+    await writer.addTile(tileData, tileInfo)
+    addedSourceIds.add(tileInfo.sourceId)
+  }
+  return {
+    addTile,
+    addSprite: writer.addSprite.bind(writer),
+    addGlyphs: writer.addGlyphs.bind(writer),
+    setMetadata: writer.setMetadata.bind(writer),
+    createTileWriteStream: ({ concurrency = 16 } = {}) =>
+      writeStreamFromAsync(addTile, { concurrency }),
+    createGlyphWriteStream: writer.createGlyphWriteStream.bind(writer),
+  }
 }
