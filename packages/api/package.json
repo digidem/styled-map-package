@@ -71,7 +71,7 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@gmaclennan/zip-reader": "^1.0.0",
+    "@gmaclennan/zip-reader": "^1.1.0",
     "@mapbox/sphericalmercator": "^2.0.2",
     "@maplibre/maplibre-gl-style-spec": "^26.4.1",
     "@placemarkio/check-geojson": "^0.1.12",

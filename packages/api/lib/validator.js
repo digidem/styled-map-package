@@ -16,13 +16,12 @@ const SUPPORTED_MAJOR_VERSIONS = [1]
 const DEFAULT_MAX_ENTRIES = 500_000
 
 // Limits on label data read for the glyph coverage check, which requires every
-// glyph range once one is reached. Untrusted archives can hold data that
-// decompresses to far more than its size, so besides per-file limits, the
-// total decompressed size may only exceed a fixed allowance by a multiple of
-// the archive bytes read.
+// glyph range once one is reached. The per-file limits bound memory use.
+// Capping each entry at MAX_EXPANSION times its size in the archive caps the
+// total at MAX_EXPANSION times the archive size, so a small malicious archive
+// can't make validation run for hours.
 const MAX_TILE_BYTES = 16 * 1024 * 1024
 const MAX_GEOJSON_BYTES = 64 * 1024 * 1024
-const BASE_READ_BUDGET = 64 * 1024 * 1024
 const MAX_EXPANSION = 32
 
 const sm = new SphericalMercator({ size: 256 })
@@ -723,7 +722,6 @@ async function collectUsedGlyphRanges(style, entries) {
       labelSourceIds.add(layer.source)
     }
   }
-  const budget = new ReadBudget()
   /** @type {Record<string, any>} */
   const sources = {}
   let geojsonReadFailed = false
@@ -741,7 +739,7 @@ async function collectUsedGlyphRanges(style, entries) {
       continue
     }
     try {
-      const data = await budget.read(dataEntry, MAX_GEOJSON_BYTES)
+      const data = await readEntry(dataEntry, MAX_GEOJSON_BYTES)
       sources[sourceId] = { ...src, data: JSON.parse(textDecoder.decode(data)) }
     } catch {
       geojsonReadFailed = true
@@ -773,7 +771,7 @@ async function collectUsedGlyphRanges(style, entries) {
       if (seenOffsets.has(entry.fileHeaderOffset)) continue
       seenOffsets.add(entry.fileHeaderOffset)
       try {
-        collector.addTile(await budget.read(entry, MAX_TILE_BYTES), sourceId)
+        collector.addTile(await readEntry(entry, MAX_TILE_BYTES), sourceId)
       } catch {
         collector.setNeedsAllRanges()
       }
@@ -791,31 +789,23 @@ function tileTemplateToRegExp(template) {
   return new RegExp(`^${escaped.replace(/\{[zxy]\}/g, '\\d+')}$`)
 }
 
-class ReadBudget {
-  #remaining = BASE_READ_BUDGET
-
-  /**
-   * Read a ZIP entry, decompressing it if it is gzipped. Throws if the data
-   * exceeds `maxBytes` or the remaining budget.
-   *
-   * @param {import('@gmaclennan/zip-reader').ZipEntry} entry
-   * @param {number} maxBytes
-   * @returns {Promise<Uint8Array>}
-   */
-  async read(entry, maxBytes) {
-    this.#remaining += MAX_EXPANSION * entry.compressedSize
-    const limit = Math.min(maxBytes, this.#remaining)
-    if (entry.uncompressedSize > limit) throw new Error('Data too large')
-    let data = await readLimited(entry.readable(), limit)
-    if (data[0] === 0x1f && data[1] === 0x8b) {
-      const decompressed = new Blob([data])
-        .stream()
-        .pipeThrough(new DecompressionStream('gzip'))
-      data = await readLimited(decompressed, limit)
-    }
-    this.#remaining -= data.byteLength
-    return data
+/**
+ * Read a ZIP entry, gunzipping `.gz` files. Throws if the data exceeds
+ * `maxBytes` or `MAX_EXPANSION` times the entry's size in the archive.
+ *
+ * @param {import('@gmaclennan/zip-reader').ZipEntry} entry
+ * @param {number} maxBytes
+ * @returns {Promise<Uint8Array>}
+ */
+async function readEntry(entry, maxBytes) {
+  const limit = Math.min(maxBytes, MAX_EXPANSION * entry.compressedSize)
+  // zip-reader enforces the declared size, so this can reject without reading
+  if (entry.uncompressedSize > limit) throw new Error('Data too large')
+  let stream = entry.readable()
+  if (entry.name.endsWith('.gz')) {
+    stream = stream.pipeThrough(new DecompressionStream('gzip'))
   }
+  return readLimited(stream, limit)
 }
 
 /**
