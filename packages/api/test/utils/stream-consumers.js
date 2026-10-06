@@ -6,7 +6,7 @@
 /**
  * Collect a web ReadableStream into a Uint8Array.
  * @param {ReadableStream<Uint8Array>} stream
- * @returns {Promise<Uint8Array>}
+ * @returns {Promise<Uint8Array<ArrayBuffer>>}
  */
 export async function streamToBuffer(stream) {
   const chunks = []
