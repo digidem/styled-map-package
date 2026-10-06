@@ -95,6 +95,7 @@ export class Writer {
   #outputController
   /** @type {boolean} */
   #dedupe
+  #finished = false
   /** @type {Map<string, string>} hash → first entry name */
   #tileHashes = new Map()
   /** @type {Array<{ name: string, originalName: string }>} */
@@ -316,6 +317,7 @@ export class Writer {
    * @param {TileInfo} opts
    */
   async addTile(tileData, { z, x, y, sourceId, format }) {
+    this.#assertNotFinished()
     let sourceInfo = this.#sources.get(sourceId)
     if (!sourceInfo) {
       const source = this.#style.sources[sourceId]
@@ -403,6 +405,7 @@ export class Writer {
    * @returns
    */
   createTileWriteStream({ concurrency = 16 } = {}) {
+    this.#assertNotFinished()
     return writeStreamFromAsync(this.addTile.bind(this), { concurrency })
   }
 
@@ -417,6 +420,7 @@ export class Writer {
    * @returns {Promise<void>}
    */
   async addSprite({ json, png, pixelRatio = 1, id = 'default' }) {
+    this.#assertNotFinished()
     this.#addedSpriteIds.add(id)
     const jsonName = getSpriteFilename({ id, pixelRatio, ext: '.json' })
     const pngName = getSpriteFilename({ id, pixelRatio, ext: '.png' })
@@ -434,6 +438,7 @@ export class Writer {
    * @returns {Promise<void>}
    */
   async addGlyphs(glyphData, { font: fontName, range }) {
+    this.#assertNotFinished()
     this.#fonts.add(fontName)
     const name = getGlyphFilename({ fontstack: fontName, range })
     return this.#append(glyphData, { name })
@@ -447,6 +452,7 @@ export class Writer {
    * @returns
    */
   createGlyphWriteStream({ concurrency = 16 } = {}) {
+    this.#assertNotFinished()
     return writeStreamFromAsync(this.addGlyphs.bind(this), { concurrency })
   }
 
@@ -457,6 +463,7 @@ export class Writer {
    * @param {unknown} value
    */
   setMetadata(key, value) {
+    this.#assertNotFinished()
     this.#style.metadata = {
       .../** @type {object | undefined} */ (this.#style.metadata),
       [key]: value,
@@ -467,8 +474,11 @@ export class Writer {
    * Finalize the styled map package and write the style to the archive.
    * This method must be called to complete the archive.
    * You must wait for your destination write stream to 'finish' before using the output.
+   * Once called, the writer's other methods and `finish()` itself throw.
    */
   async finish() {
+    this.#assertNotFinished()
+    this.#finished = true
     await this.#append(FORMAT_VERSION, { name: VERSION_FILE })
     this.#prepareStyle()
     const style = JSON.stringify(this.#style)
@@ -488,6 +498,10 @@ export class Writer {
 
     const sortedEntries = sortEntries(entries)
     await this.#zipWriter.finalize({ entries: sortedEntries })
+  }
+
+  #assertNotFinished() {
+    if (this.#finished) throw new Error('Writer is already finished')
   }
 
   /**
