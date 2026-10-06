@@ -1,5 +1,5 @@
 import { temporaryWrite } from 'tempy'
-import { assert, describe, onTestFinished, test } from 'vitest'
+import { assert, describe, expect, onTestFinished, test, vi } from 'vitest'
 import { ZipWriter } from 'zip-writer'
 
 import { randomBytes } from 'node:crypto'
@@ -206,6 +206,15 @@ describe('validate — ZIP and file errors', () => {
     const result = await validate(filepath)
     assert.equal(result.valid, false)
     assert(hasError(result, 'invalid_zip'))
+  })
+
+  test('non-ZIP file is closed after validation', async () => {
+    const { FileSource } = await import('@gmaclennan/zip-reader/file-source')
+    const closeSpy = vi.spyOn(FileSource.prototype, 'close')
+    onTestFinished(() => closeSpy.mockRestore())
+    const filepath = await writeTempFile(randomBytes(1024))
+    await validate(filepath)
+    expect(closeSpy).toHaveBeenCalledOnce()
   })
 
   test('unsafe ZIP entry with .. → unsafe_entry error', async () => {
