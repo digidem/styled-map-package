@@ -144,3 +144,9 @@ test('Reader, invalid smp file', async () => {
   // closes without error
   await reader.close()
 })
+
+test('Reader rejects an unsupported source type', async () => {
+  // @ts-expect-error
+  const reader = new Reader({})
+  await assert.rejects(reader.opened(), TypeError)
+})

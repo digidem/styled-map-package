@@ -1,5 +1,3 @@
-import { ZipReader } from '@gmaclennan/zip-reader'
-
 import { ENOENT } from './utils/errors.js'
 import { noop } from './utils/misc.js'
 import { validateStyle } from './utils/style.js'
@@ -10,6 +8,7 @@ import {
   URI_BASE,
   VERSION_FILE,
 } from './utils/templates.js'
+import { explainZipError, openZip } from './utils/zip.js'
 
 /**
  * Simple deferred promise helper. Not `Promise.withResolvers()`, which is too
@@ -71,7 +70,8 @@ class Entries {
           this.#deferredEntries.get(normalizedName)?.resolve(entry)
           this.#deferredEntries.delete(normalizedName)
         }
-      } catch (error) {
+      } catch (err) {
+        const error = explainZipError(err)
         this.#error = error
         for (const deferred of this.#deferredEntries.values()) {
           deferred.reject(error)
@@ -189,27 +189,32 @@ export class Reader {
   #maxResourceSize
 
   /**
-   * @param {string | import('@gmaclennan/zip-reader').ZipReader} filepathOrZip Path to styled map package (`.smp`) file, or a ZipReader instance
+   * @param {string | import('@gmaclennan/zip-reader').RandomAccessSource | import('@gmaclennan/zip-reader').ZipReader} source
+   *   Path to a styled map package (`.smp`) file (Node.js only), a
+   *   RandomAccessSource such as `BlobSource`, or a ZipReader instance. A
+   *   ZipReader must be opened with `{ skipUniqueEntryCheck: true }` to read
+   *   packages written with `dedupe: true`. The Reader only closes sources it
+   *   opened from a file path.
    * @param {ReaderOptions} [options]
    */
-  constructor(filepathOrZip, options = {}) {
+  constructor(source, options = {}) {
     const { maxEntries = 500_000, maxResourceSize = 20 * 1024 * 1024 } = options
     this.#maxResourceSize = maxResourceSize
     /** @type {Promise<import('@gmaclennan/zip-reader').ZipReader>} */
     let zipPromise
-    if (typeof filepathOrZip === 'string') {
+    if (typeof source === 'string') {
       // Dynamic import so FileSource (which uses node:fs) is never loaded
-      // in browser environments where only ZipReader instances are passed.
+      // in browser environments.
       const sourcePromise = import('@gmaclennan/zip-reader/file-source').then(
-        ({ FileSource }) => FileSource.open(filepathOrZip),
+        ({ FileSource }) => FileSource.open(source),
       )
       sourcePromise.catch(noop)
-      zipPromise = sourcePromise.then((source) => {
-        this.#fileSource = source
-        return ZipReader.from(source, { skipUniqueEntryCheck: true })
+      zipPromise = sourcePromise.then((fileSource) => {
+        this.#fileSource = fileSource
+        return openZip(fileSource)
       })
     } else {
-      zipPromise = Promise.resolve(filepathOrZip)
+      zipPromise = openZip(source)
     }
     zipPromise.catch(noop)
     this.#entries = new Entries(zipPromise, { maxEntries })
