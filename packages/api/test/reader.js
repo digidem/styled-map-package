@@ -17,7 +17,7 @@ const enc = new TextEncoder()
 /**
  * Create a zip buffer with given entries using zip-writer.
  * @param {Array<{ name: string, data: string | Uint8Array }>} entries
- * @returns {Promise<Uint8Array>}
+ * @returns {Promise<Uint8Array<ArrayBuffer>>}
  */
 async function createZipBuffer(entries) {
   const zw = new ZipWriter()
