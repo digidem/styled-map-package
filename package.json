@@ -10,7 +10,7 @@
     "build": "npm run build --workspaces --if-present",
     "types": "npm run types --workspaces --if-present",
     "changeset": "changeset",
-    "version-packages": "changeset version",
+    "version-packages": "changeset version && npm install --package-lock-only",
     "release": "npm run build --workspaces --if-present && changeset publish",
     "prepare": "husky"
   },
