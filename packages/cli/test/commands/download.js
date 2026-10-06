@@ -131,7 +131,7 @@ describe('runDownload', () => {
       expect.objectContaining({
         bbox: [11, 47, 12, 47.5],
         maxzoom: 5,
-        styleUrl: 'https://example.com/style.json',
+        style: 'https://example.com/style.json',
       }),
     )
     expect(deps.prompt.input).not.toHaveBeenCalled()
@@ -158,7 +158,7 @@ describe('runDownload', () => {
     )
     expect(deps.download).toHaveBeenCalledWith(
       expect.objectContaining({
-        styleUrl: 'https://example.com/style.json',
+        style: 'https://example.com/style.json',
       }),
     )
   })
