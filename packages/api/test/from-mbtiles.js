@@ -42,7 +42,7 @@ function replaceVariables(template, variables) {
 /**
  * Verify that SMP buffer produced by fromMBTiles contains correct tiles.
  *
- * @param {Uint8Array} smpBuffer
+ * @param {Uint8Array<ArrayBuffer>} smpBuffer
  * @param {MBTiles} mbtiles
  */
 async function verifySmp(smpBuffer, mbtiles) {

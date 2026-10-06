@@ -17,7 +17,7 @@ const enc = new TextEncoder()
 /**
  * Create a zip buffer with given entries using zip-writer.
  * @param {Array<{ name: string, data: string | Uint8Array, store?: boolean }>} entries
- * @returns {Promise<Uint8Array>}
+ * @returns {Promise<Uint8Array<ArrayBuffer>>}
  */
 async function createZipBuffer(entries) {
   const zw = new ZipWriter()
@@ -43,7 +43,7 @@ async function createZipBuffer(entries) {
 
 /**
  * Create a Reader from a zip buffer.
- * @param {Uint8Array} zipBuffer
+ * @param {Uint8Array<ArrayBuffer>} zipBuffer
  * @param {import('../lib/reader.js').ReaderOptions} [options]
  * @returns {Promise<Reader>}
  */
@@ -71,7 +71,7 @@ function minimalStyle(overrides = {}) {
  * @param {object} [opts]
  * @param {object} [opts.style]
  * @param {Array<{z: number, x: number, y: number, sourceId: string, format?: string}>} [opts.tiles]
- * @returns {Promise<Uint8Array>}
+ * @returns {Promise<Uint8Array<ArrayBuffer>>}
  */
 async function createValidSmp(opts = {}) {
   const style = opts.style || {

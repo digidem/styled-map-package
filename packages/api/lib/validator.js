@@ -803,11 +803,7 @@ async function readEntry(entry, maxBytes) {
   if (entry.uncompressedSize > limit) throw new Error('Data too large')
   let stream = entry.readable()
   if (entry.name.endsWith('.gz')) {
-    stream = stream.pipeThrough(
-      /** @type {TransformStream<Uint8Array, Uint8Array>} */ (
-        new DecompressionStream('gzip')
-      ),
-    )
+    stream = stream.pipeThrough(new DecompressionStream('gzip'))
   }
   return readLimited(stream, limit)
 }
