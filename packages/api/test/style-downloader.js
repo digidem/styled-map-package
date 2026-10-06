@@ -5,6 +5,12 @@ import { fileURLToPath } from 'node:url'
 
 import { StyleDownloader } from '../lib/style-downloader.js'
 import { isLocallyRenderedRange } from '../lib/utils/style.js'
+import {
+  GLYPH_URI,
+  TILE_URI,
+  getSpriteUri,
+  isProvidedByCaller,
+} from '../lib/utils/templates.js'
 import { startSMPServer } from './utils/smp-server.js'
 import { streamToBuffer } from './utils/stream-consumers.js'
 
@@ -560,5 +566,138 @@ describe('StyleDownloader with un-inlined sources', () => {
       count++
     }
     assert(count > 0, 'downloaded at least one tile')
+  })
+})
+
+describe('isProvidedByCaller', () => {
+  test('is true only when every URL is an smp: URL', () => {
+    expect(isProvidedByCaller(GLYPH_URI)).toBe(true)
+    expect(isProvidedByCaller([TILE_URI, 'smp://other/x'])).toBe(true)
+    expect(isProvidedByCaller([TILE_URI, 'https://example.com/x'])).toBe(false)
+    expect(isProvidedByCaller('https://example.com/x')).toBe(false)
+  })
+
+  test('is false for no URLs, e.g. an inlined PMTiles source', () => {
+    expect(isProvidedByCaller([])).toBe(false)
+    expect(isProvidedByCaller(undefined)).toBe(false)
+  })
+})
+
+describe('StyleDownloader with smp: URLs', () => {
+  /** @type {{ baseUrl: string, close: () => Promise<void> }} */
+  let demotilesServer
+  /** @type {{ baseUrl: string, close: () => Promise<void> }} */
+  let osmBrightServer
+
+  beforeAll(async () => {
+    demotilesServer = await startSMPServer(
+      fileURLToPath(new URL('./fixtures/demotiles-z2.smp', import.meta.url)),
+    )
+    osmBrightServer = await startSMPServer(
+      fileURLToPath(new URL('./fixtures/osm-bright-z6.smp', import.meta.url)),
+    )
+  })
+
+  afterAll(async () => {
+    await demotilesServer?.close()
+    await osmBrightServer?.close()
+  })
+
+  /** @param {{ baseUrl: string }} server */
+  async function fetchStyle(server) {
+    const res = await fetch(server.baseUrl + 'style.json')
+    return /** @type {import('@maplibre/maplibre-gl-style-spec').StyleSpecification} */ (
+      await res.json()
+    )
+  }
+
+  test('getSprites() skips sprites with smp: URLs', async () => {
+    const style = await fetchStyle(osmBrightServer)
+    assert(typeof style.sprite === 'string', 'fixture has a string sprite')
+    const downloader = new StyleDownloader({
+      ...style,
+      sprite: [
+        { id: 'default', url: style.sprite },
+        { id: 'overlays', url: getSpriteUri('overlays') },
+      ],
+    })
+    const yielded = []
+    for await (const { id, pixelRatio, json, png } of downloader.getSprites()) {
+      yielded.push(`${id}@${pixelRatio}`)
+      await streamToBuffer(json)
+      await streamToBuffer(png)
+    }
+    expect(yielded).toEqual(['default@1', 'default@2'])
+  })
+
+  test('getSprites() yields nothing for an smp: string sprite', async () => {
+    const style = await fetchStyle(demotilesServer)
+    const downloader = new StyleDownloader({ ...style, sprite: getSpriteUri() })
+    const yielded = []
+    for await (const sprite of downloader.getSprites()) yielded.push(sprite)
+    expect(yielded).toEqual([])
+  })
+
+  test('getGlyphs() yields nothing for smp: glyphs', async () => {
+    const style = await fetchStyle(demotilesServer)
+    const downloader = new StyleDownloader({ ...style, glyphs: GLYPH_URI })
+    const yielded = []
+    for await (const glyph of downloader.getGlyphs()) yielded.push(glyph)
+    expect(yielded).toEqual([])
+  })
+
+  test('getTiles() skips sources with smp: tiles', async () => {
+    const style = await fetchStyle(demotilesServer)
+    const downloader = new StyleDownloader({
+      ...style,
+      sources: {
+        ...style.sources,
+        overlay: { type: 'vector', tiles: [TILE_URI] },
+      },
+    })
+    const tiles = downloader.getTiles({
+      bounds: [-180, -85, 180, 85],
+      maxzoom: 1,
+    })
+    const sourceIds = new Set()
+    for await (const [stream, { sourceId }] of tiles) {
+      sourceIds.add(sourceId)
+      await streamToBuffer(stream)
+    }
+    expect([...sourceIds]).toEqual(['maplibre'])
+    expect(tiles.stats).toMatchObject({ skipped: 0 })
+    expect(tiles.stats.downloaded).toBe(tiles.stats.total)
+  })
+
+  /** @type {Array<[string, import('@maplibre/maplibre-gl-style-spec').SourceSpecification, RegExp]>} */
+  const unsupported = [
+    [
+      'a source with an smp: url',
+      { type: 'vector', url: 'smp://maps.v1/s/overlay' },
+      /use tiles: \[TILE_URI\]/,
+    ],
+    [
+      'a source mixing smp: and other tile URLs',
+      { type: 'vector', tiles: [TILE_URI, 'https://example.com/{z}/{x}/{y}'] },
+      /use tiles: \[TILE_URI\]/,
+    ],
+    [
+      'a raster-dem source with smp: tiles',
+      { type: 'raster-dem', tiles: [TILE_URI] },
+      /raster-dem sources can't be added/,
+    ],
+    [
+      'GeoJSON data with an smp: URL',
+      { type: 'geojson', data: 'smp://maps.v1/data.geojson' },
+      /GeoJSON data can't be added/,
+    ],
+  ]
+  test.each(unsupported)('getStyle() rejects %s', async (_, source, error) => {
+    const downloader = new StyleDownloader({
+      version: 8,
+      sources: { overlay: source },
+      layers: [],
+    })
+    await expect(downloader.getStyle()).rejects.toThrow(error)
   })
 })

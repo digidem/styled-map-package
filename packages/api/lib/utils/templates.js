@@ -20,6 +20,10 @@ const SPRITE_FILE = SPRITES_FOLDER + '/{id}/sprite{pixelRatio}{ext}'
 // This must include placeholders `{fontstack}` and `{range}`, since these are
 // part of the MapLibre style spec.
 export const GLYPH_FILE = FONTS_FOLDER + '/{fontstack}/{range}.pbf.gz'
+/**
+ * The glyphs URL in a styled map package. In a style passed to `download()`,
+ * use it for glyphs added with `writer.addGlyphs()` rather than downloaded.
+ */
 export const GLYPH_URI = URI_BASE + GLYPH_FILE
 
 const pathToResouceType = /** @type {const} */ ({
@@ -94,7 +98,11 @@ export function getGlyphFilename({ fontstack, range }) {
 }
 
 /**
- * Get the URI template for the sprites in the style
+ * Get the URL for a sprite in a styled map package. Use it in a style passed
+ * to `download()` for a sprite that is added with `writer.addSprite()` rather
+ * than downloaded.
+ *
+ * @param {string} [id='default']
  */
 export function getSpriteUri(id = 'default') {
   return (
@@ -162,4 +170,27 @@ export function templateToRegex(template, placeholders) {
     }
   }
   return new RegExp(`^${pattern}$`)
+}
+
+/**
+ * Placeholder tiles URL for a source in a style passed to `download()`, whose
+ * tiles are added with `writer.addTile()` rather than downloaded. The Writer
+ * replaces it with the source's URL in the package.
+ */
+export const TILE_URI = URI_BASE + SOURCES_FOLDER + '/{z}/{x}/{y}'
+
+/**
+ * Whether URLs are in the package's own `smp:` scheme, which means the
+ * resource is added to the Writer by the caller rather than downloaded.
+ *
+ * @param {string | string[] | undefined} urls
+ */
+export function isProvidedByCaller(urls) {
+  const list = typeof urls === 'string' ? [urls] : (urls ?? [])
+  return list.length > 0 && list.every(isSmpUrl)
+}
+
+/** @param {string} url */
+export function isSmpUrl(url) {
+  return url.startsWith(URI_SCHEME + ':')
 }

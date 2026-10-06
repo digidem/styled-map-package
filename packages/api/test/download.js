@@ -18,6 +18,8 @@ import { gzipSync } from 'node:zlib'
 import { download } from '../lib/download.js'
 import { Reader } from '../lib/reader.js'
 import { ENOENT } from '../lib/utils/errors.js'
+import { readableFromAsync } from '../lib/utils/streams.js'
+import { GLYPH_URI, TILE_URI, getSpriteUri } from '../lib/utils/templates.js'
 import { validate } from '../lib/validator.js'
 import { encodeTile } from './utils/mvt-encode.js'
 import { startSMPServer } from './utils/smp-server.js'
@@ -329,6 +331,365 @@ describe('download with osm-bright-z6 (sprites)', () => {
       last.sprites.downloaded > 0,
       `sprites downloaded: ${last.sprites.downloaded}`,
     )
+  })
+})
+
+describe('download with beforeFinish', () => {
+  // 1×1 transparent PNG
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    'base64',
+  )
+  /** @param {number} pixelRatio */
+  const spriteJson = (pixelRatio) =>
+    JSON.stringify({
+      dot: { x: 0, y: 0, width: 1, height: 1, pixelRatio, sdf: true },
+    })
+  const overlayTile = () =>
+    encodeTile([{ name: 'points', features: [{ name: 'Привет' }] }])
+
+  /** @type {{ baseUrl: string, close: () => Promise<void> }} */
+  let demotilesServer
+  /** @type {{ baseUrl: string, close: () => Promise<void> }} */
+  let osmBrightServer
+
+  beforeAll(async () => {
+    demotilesServer = await startSMPServer(
+      fileURLToPath(new URL('./fixtures/demotiles-z2.smp', import.meta.url)),
+    )
+    osmBrightServer = await startSMPServer(
+      fileURLToPath(new URL('./fixtures/osm-bright-z6.smp', import.meta.url)),
+    )
+  })
+
+  afterAll(async () => {
+    await demotilesServer?.close()
+    await osmBrightServer?.close()
+  })
+
+  /** @param {Uint8Array<ArrayBuffer>} smp */
+  async function readSmp(smp) {
+    const zip = await ZipReader.from(new BufferSource(smp))
+    const reader = new Reader(zip)
+    onTestFinished(() => reader.close())
+    return { zip, reader, style: await reader.getStyle() }
+  }
+
+  /** @param {{ baseUrl: string }} server */
+  async function fetchStyle(server) {
+    const res = await fetch(server.baseUrl + 'style.json')
+    return /** @type {import('@maplibre/maplibre-gl-style-spec').StyleSpecification} */ (
+      await res.json()
+    )
+  }
+
+  /**
+   * Demotiles style with an `overlay` source whose tiles are added in
+   * `beforeFinish`, and a layer for it.
+   *
+   * @param {{ labels?: boolean }} [opts]
+   * @returns {Promise<import('@maplibre/maplibre-gl-style-spec').StyleSpecification>}
+   */
+  async function overlayStyle({ labels = false } = {}) {
+    const style = await fetchStyle(demotilesServer)
+    return {
+      ...style,
+      sources: {
+        ...style.sources,
+        overlay: { type: 'vector', tiles: [TILE_URI] },
+      },
+      layers: [
+        ...style.layers,
+        labels
+          ? {
+              id: 'overlay-labels',
+              type: 'symbol',
+              source: 'overlay',
+              'source-layer': 'points',
+              layout: {
+                'text-field': ['get', 'name'],
+                'text-font': ['Open Sans Semibold'],
+              },
+            }
+          : {
+              id: 'overlay-points',
+              type: 'circle',
+              source: 'overlay',
+              'source-layer': 'points',
+            },
+      ],
+    }
+  }
+
+  /** @type {import('../lib/writer.js').TileInfo} */
+  const overlayTileInfo = {
+    z: 0,
+    x: 0,
+    y: 0,
+    sourceId: 'overlay',
+    format: 'mvt',
+  }
+
+  test('is called after everything is downloaded, with the needed glyph ranges', async () => {
+    /** @type {import('../lib/download.js').DownloadProgress | undefined} */
+    let lastProgress
+    /** @type {import('../lib/download.js').DownloadProgress | undefined} */
+    let progressInHook
+    /** @type {import('../lib/download.js').BeforeFinishContext | undefined} */
+    let context
+    await streamToBuffer(
+      download({
+        style: osmBrightServer.baseUrl + 'style.json',
+        bbox: [10, 47, 11, 48],
+        maxzoom: 0,
+        onprogress: (progress) => (lastProgress = progress),
+        beforeFinish: (_, ctx) => {
+          progressInHook = lastProgress
+          context = ctx
+        },
+      }),
+    )
+    expect(progressInHook?.sprites.done).toBe(true)
+    expect(progressInHook?.tiles.done).toBe(true)
+    expect(progressInHook?.glyphs.done).toBe(true)
+    expect(context?.glyphRanges).toContain(0)
+  })
+
+  test('gets only the Writer methods for adding resources', async () => {
+    /** @type {object | undefined} */
+    let hookWriter
+    await streamToBuffer(
+      download({
+        style: demotilesServer.baseUrl + 'style.json',
+        bbox: [-180, -85, 180, 85],
+        maxzoom: 0,
+        beforeFinish: (writer) => {
+          hookWriter = writer
+        },
+      }),
+    )
+    expect(Object.keys(hookWriter ?? {}).sort()).toEqual([
+      'addGlyphs',
+      'addSprite',
+      'addTile',
+      'createGlyphWriteStream',
+      'createTileWriteStream',
+      'setMetadata',
+    ])
+  })
+
+  test('an error in beforeFinish errors the stream', async () => {
+    await expect(
+      streamToBuffer(
+        download({
+          style: demotilesServer.baseUrl + 'style.json',
+          bbox: [-180, -85, 180, 85],
+          maxzoom: 0,
+          beforeFinish: () => {
+            throw new Error('beforeFinish failed')
+          },
+        }),
+      ),
+    ).rejects.toThrow('beforeFinish failed')
+  })
+
+  test('aborts the signal passed to beforeFinish when the stream is cancelled', async () => {
+    /** @type {AbortSignal | undefined} */
+    let hookSignal
+    /** @type {(value?: unknown) => void} */
+    let onHookStarted = () => {}
+    const hookStarted = new Promise((resolve) => (onHookStarted = resolve))
+    const stream = download({
+      style: demotilesServer.baseUrl + 'style.json',
+      bbox: [-180, -85, 180, 85],
+      maxzoom: 0,
+      beforeFinish: async (_, { signal }) => {
+        hookSignal = signal
+        onHookStarted()
+        await new Promise((resolve) =>
+          signal.addEventListener('abort', resolve),
+        )
+      },
+    })
+    const reader = stream.getReader()
+    const drained = (async () => {
+      while (!(await reader.read()).done);
+    })().catch(() => {})
+    await hookStarted
+    await reader.cancel()
+    await drained
+    expect(hookSignal?.aborted).toBe(true)
+  })
+
+  test("adds a sprite alongside the style's downloaded sprites", async () => {
+    const style = await fetchStyle(osmBrightServer)
+    assert(typeof style.sprite === 'string', 'fixture has a string sprite')
+    const smp = await streamToBuffer(
+      download({
+        style: {
+          ...style,
+          sprite: [
+            { id: 'default', url: style.sprite },
+            { id: 'overlays', url: getSpriteUri('overlays') },
+          ],
+        },
+        bbox: [10, 47, 11, 48],
+        maxzoom: 0,
+        beforeFinish: async (writer) => {
+          for (const pixelRatio of [1, 2]) {
+            await writer.addSprite({
+              id: 'overlays',
+              pixelRatio,
+              png: new Uint8Array(png),
+              json: spriteJson(pixelRatio),
+            })
+          }
+        },
+      }),
+    )
+    const { zip, reader, style: styleOut } = await readSmp(smp)
+    assert(Array.isArray(styleOut.sprite), 'sprite is an array')
+    expect(styleOut.sprite.map(({ id }) => id)).toEqual(['default', 'overlays'])
+    for (const path of [
+      'sprites/default/sprite.png',
+      'sprites/default/sprite@2x.png',
+      'sprites/overlays/sprite.png',
+      'sprites/overlays/sprite@2x.png',
+    ]) {
+      const resource = await reader.getResource(path)
+      await streamToBuffer(resource.stream)
+    }
+    const json = await reader.getResource('sprites/overlays/sprite@2x.json')
+    expect(new TextDecoder().decode(await streamToBuffer(json.stream))).toEqual(
+      spriteJson(2),
+    )
+    expect((await validate(zip)).valid).toBe(true)
+  })
+
+  test('adds tiles and metadata for a source with smp: tiles without downloading them', async () => {
+    /** @type {import('../lib/download.js').DownloadProgress | undefined} */
+    let lastProgress
+    const smp = await streamToBuffer(
+      download({
+        style: await overlayStyle(),
+        bbox: [-180, -85, 180, 85],
+        maxzoom: 1,
+        onprogress: (progress) => (lastProgress = progress),
+        beforeFinish: async (writer) => {
+          async function* tiles() {
+            yield /** @type {const} */ ([overlayTile(), overlayTileInfo])
+          }
+          await readableFromAsync(tiles()).pipeTo(
+            writer.createTileWriteStream(),
+          )
+          writer.setMetadata('custom', 'value')
+        },
+      }),
+    )
+    const { downloaded, total, skipped } = lastProgress?.tiles ?? {}
+    expect(total).toBeGreaterThan(0)
+    expect({ downloaded, skipped }).toEqual({ downloaded: total, skipped: 0 })
+    const { zip, style } = await readSmp(smp)
+    expect(style.sources.overlay).toMatchObject({ type: 'vector', maxzoom: 0 })
+    expect(style.layers.map(({ id }) => id)).toContain('overlay-points')
+    expect(style.metadata).toMatchObject({ custom: 'value' })
+    expect((await validate(zip)).valid).toBe(true)
+  })
+
+  test('errors the stream when beforeFinish adds no tiles for a source with smp: tiles', async () => {
+    await expect(
+      streamToBuffer(
+        download({
+          style: await overlayStyle(),
+          bbox: [-180, -85, 180, 85],
+          maxzoom: 0,
+          beforeFinish: () => {},
+        }),
+      ),
+    ).rejects.toThrow('beforeFinish added no tiles for source "overlay"')
+  })
+
+  test('downloads every glyph range when a source with smp: tiles has labels', async () => {
+    /** @type {import('../lib/download.js').BeforeFinishContext | undefined} */
+    let context
+    const smp = await streamToBuffer(
+      download({
+        style: await overlayStyle({ labels: true }),
+        bbox: [-180, -85, 180, 85],
+        maxzoom: 0,
+        beforeFinish: async (writer, ctx) => {
+          context = ctx
+          await writer.addTile(overlayTile(), overlayTileInfo)
+        },
+      }),
+    )
+    expect(context).toBeDefined()
+    expect(context?.glyphRanges).toBeUndefined()
+    const { reader, style } = await readSmp(smp)
+    expect(style.metadata).not.toHaveProperty(['smp:glyphRanges'])
+    // Cyrillic, used only by the label in the added tile
+    const glyph = await reader.getResource(
+      'fonts/Open Sans Semibold/1024-1279.pbf.gz',
+    )
+    await streamToBuffer(glyph.stream)
+  }, 30_000)
+
+  test('adds glyphs for smp: glyphs without downloading them', async () => {
+    const style = await fetchStyle(demotilesServer)
+    /** @type {import('../lib/download.js').DownloadProgress | undefined} */
+    let lastProgress
+    /** @type {number[] | undefined} */
+    let glyphRanges
+    const smp = await streamToBuffer(
+      download({
+        style: { ...style, glyphs: GLYPH_URI },
+        bbox: [-180, -85, 180, 85],
+        maxzoom: 0,
+        onprogress: (progress) => (lastProgress = progress),
+        beforeFinish: async (writer, context) => {
+          glyphRanges = context.glyphRanges
+          for (const start of context.glyphRanges ?? []) {
+            await writer.addGlyphs(gzipSync('glyphs'), {
+              font: 'Open Sans Semibold',
+              range: `${start}-${start + 255}`,
+            })
+          }
+        },
+      }),
+    )
+    expect(lastProgress?.glyphs).toMatchObject({ total: 0, downloaded: 0 })
+    expect(glyphRanges).toContain(0)
+    const { zip, reader, style: styleOut } = await readSmp(smp)
+    expect(styleOut.metadata).not.toHaveProperty(['smp:glyphRanges'])
+    const glyph = await reader.getResource(
+      'fonts/Open Sans Semibold/0-255.pbf.gz',
+    )
+    await streamToBuffer(glyph.stream)
+    expect((await validate(zip)).valid).toBe(true)
+  })
+
+  test('errors before downloading when the style has smp: URLs and no beforeFinish', async () => {
+    // A style read from a package without a base URL uses smp: URLs throughout
+    const reader = new Reader(
+      fileURLToPath(new URL('./fixtures/demotiles-z2.smp', import.meta.url)),
+    )
+    onTestFinished(() => reader.close())
+    const style = await reader.getStyle()
+    /** @type {import('../lib/download.js').DownloadProgress | undefined} */
+    let lastProgress
+    await expect(
+      streamToBuffer(
+        download({
+          style,
+          bbox: [-180, -85, 180, 85],
+          maxzoom: 0,
+          onprogress: (progress) => (lastProgress = progress),
+        }),
+      ),
+    ).rejects.toThrow(
+      'The style references source "maplibre", glyphs with smp: URLs',
+    )
+    expect(lastProgress).toBeUndefined()
   })
 })
 

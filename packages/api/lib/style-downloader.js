@@ -25,6 +25,7 @@ import {
   mapFontStacks,
   validateStyle,
 } from './utils/style.js'
+import { isProvidedByCaller, isSmpUrl } from './utils/templates.js'
 import { withDownloadState } from './utils/tile-download-state.js'
 
 /** @import { SourceSpecification, StyleSpecification } from '@maplibre/maplibre-gl-style-spec' */
@@ -128,6 +129,7 @@ export class StyleDownloader {
    * @returns {Promise<InlinedSource>}
    */
   async #getInlinedSource(sourceId, source) {
+    assertSupportedSmpUrls(sourceId, source)
     if (isInlinedSource(source)) {
       return source
     }
@@ -190,7 +192,8 @@ export class StyleDownloader {
   /**
    * Download the sprite PNGs and JSON files for this style. Returns an async
    * generator of json and png readable streams, and the sprite id and pixel
-   * ratio. Downloads pixel ratios `1` and `2`.
+   * ratio. Downloads pixel ratios `1` and `2`. Skips sprites with an `smp://`
+   * URL (see `isProvidedByCaller()`).
    *
    * @param {object} [opts]
    * @param {AbortSignal} [opts.signal] Stop issuing downloads once aborted
@@ -204,6 +207,7 @@ export class StyleDownloader {
       ? style.sprite
       : [{ id: 'default', url: style.sprite }]
     for (const { id, url } of spriteDefs) {
+      if (isProvidedByCaller(url)) continue
       for (const pixelRatio of [1, 2]) {
         const format = pixelRatio === 1 ? '' : '@2x'
         const jsonUrl = normalizeSpriteURL(url, format, '.json', accessToken)
@@ -221,7 +225,8 @@ export class StyleDownloader {
    * Download all the glyphs for the fonts used in this style. When font stacks
    * are used in the style.json (e.g. lists of prefered fonts like with CSS),
    * then the first font in the stack is downloaded. Downloads all glyph ranges
-   * unless `ranges` is given.
+   * unless `ranges` is given. Downloads nothing if the style's `glyphs` URL is
+   * an `smp://` URL (see `isProvidedByCaller()`).
    *
    * Returns an async generator of readable streams of glyph data and glyph info
    * objects.
@@ -240,7 +245,7 @@ export class StyleDownloader {
     signal,
   } = {}) {
     const style = await this.getStyle()
-    if (!style.glyphs) return
+    if (!style.glyphs || isProvidedByCaller(style.glyphs)) return
 
     let completed = 0
     /** @type {GlyphDownloadStats} */
@@ -324,7 +329,8 @@ export class StyleDownloader {
   /**
    * Get all the tiles for this style within the given bounds and zoom range.
    * Returns an async generator of readable streams of tile data and tile info
-   * objects.
+   * objects. Skips sources whose tiles have an `smp://` URL (see
+   * `isProvidedByCaller()`).
    *
    * The returned iterator also has a `skipped` property which is an
    * array of tiles which could not be downloaded, and a `stats` property which
@@ -371,6 +377,7 @@ export class StyleDownloader {
           if (source.type !== 'raster' && source.type !== 'vector') {
             continue
           }
+          if (isProvidedByCaller(source.tiles)) continue
           // Baseline stats for this source, used in the `onprogress` closure
           // below. Sorry for the hard-to-follow code! `onprogress` can be called
           // after we are already reading the next source, hence the need for a
@@ -444,5 +451,43 @@ function addStats(statsA, statsB) {
     downloaded: statsA.downloaded + statsB.downloaded,
     skipped: statsA.skipped + statsB.skipped,
     totalBytes: statsA.totalBytes + statsB.totalBytes,
+  }
+}
+
+/**
+ * The caller can add tiles for a vector or raster source with an `smp:` URL in
+ * `tiles`. Reject other uses of `smp:` URLs in a source, which would otherwise
+ * fail to download or be partly downloaded.
+ *
+ * @param {string} sourceId
+ * @param {SourceSpecification} source
+ */
+function assertSupportedSmpUrls(sourceId, source) {
+  if (source.type === 'geojson') {
+    if (typeof source.data === 'string' && isSmpUrl(source.data)) {
+      throw new Error(
+        `Source ${sourceId}: GeoJSON data can't be added to the Writer, so include it in the style instead of an smp: URL`,
+      )
+    }
+    return
+  }
+  if (
+    source.type !== 'vector' &&
+    source.type !== 'raster' &&
+    source.type !== 'raster-dem'
+  ) {
+    return
+  }
+  const urls = [...(source.tiles ?? []), ...(source.url ? [source.url] : [])]
+  if (!urls.some(isSmpUrl)) return
+  if (source.type === 'raster-dem') {
+    throw new Error(
+      `Source ${sourceId}: tiles for raster-dem sources can't be added to the Writer`,
+    )
+  }
+  if (source.url !== undefined || !isProvidedByCaller(source.tiles)) {
+    throw new Error(
+      `Source ${sourceId}: use tiles: [TILE_URI] for a source whose tiles are added to the Writer, without any other tile URLs or a url`,
+    )
   }
 }
