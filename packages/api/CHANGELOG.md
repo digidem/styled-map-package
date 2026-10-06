@@ -1,5 +1,21 @@
 # styled-map-package-api
 
+## 6.2.0
+
+### Minor Changes
+
+- [#134](https://github.com/digidem/styled-map-package/pull/134) [`56ecb10`](https://github.com/digidem/styled-map-package/commit/56ecb1032186bc24aea7cfbad9f42e13cb6b26b5) Thanks [@gmaclennan](https://github.com/gmaclennan)! - `download()` takes a `beforeFinish(writer, { signal, glyphRanges })` option for adding resources that aren't downloaded, such as sprites for layers added to a style object, tiles for a local overlay source, or local fonts. Reference them in the style with `smp:` URLs from the newly exported `getSpriteUri()`, `TILE_URI` and `GLYPH_URI`: `StyleDownloader` no longer tries to download sprites, tiles or glyphs with `smp:` URLs, and rejects `smp:` URLs it can't skip, such as a source `url` or GeoJSON `data`.
+
+- [#130](https://github.com/digidem/styled-map-package/pull/130) [`1a814f1`](https://github.com/digidem/styled-map-package/commit/1a814f15387a6e450bafd40897d0570bc6a3ce1a) Thanks [@gmaclennan](https://github.com/gmaclennan)! - `download()` takes a new `style` option, which accepts either a style URL or a style object, so a style that isn't hosted anywhere can be downloaded without rebuilding `download()` from `StyleDownloader` and `Writer`. `styleUrl` still works but is deprecated.
+
+### Patch Changes
+
+- [#132](https://github.com/digidem/styled-map-package/pull/132) [`adfbb60`](https://github.com/digidem/styled-map-package/commit/adfbb60d374e34f841eb2732459abe0fc55d4d51) Thanks [@gmaclennan](https://github.com/gmaclennan)! - GeoJSON sources keep their `maxzoom` instead of being written with `maxzoom: 0`, which made MapLibre tile them only at zoom 0 and render them coarsely. `smp:maxzoom` and the default `zoom` now come from the tile sources, as the spec requires, and fall back to 16 only for GeoJSON-only packages.
+
+- [#131](https://github.com/digidem/styled-map-package/pull/131) [`62d74b5`](https://github.com/digidem/styled-map-package/commit/62d74b5e36dc460fda6bad9db13a153ab543443d) Thanks [@gmaclennan](https://github.com/gmaclennan)! - Limit how far each tile and GeoJSON file may expand when `validate()` decompresses it for the glyph coverage check, instead of capping the total across the archive, and stream the decompression rather than buffering the compressed data first.
+
+- [#137](https://github.com/digidem/styled-map-package/pull/137) [`54a13e4`](https://github.com/digidem/styled-map-package/commit/54a13e4cf5313a10dcb8324c7469e555629ae96b) Thanks [@gmaclennan](https://github.com/gmaclennan)! - `Writer` methods now throw "Writer is already finished" once `finish()` has been called. Previously `setMetadata()` and a duplicate tile with `dedupe` were silently lost, and other calls failed with unrelated errors such as "VERSION already added".
+
 ## 6.1.0
 
 ### Minor Changes
