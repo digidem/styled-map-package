@@ -1,6 +1,6 @@
 {
   "name": "MapLibre",
-  "zoom": 14,
+  "zoom": 0,
   "pitch": 0,
   "center": [
     0,
@@ -85,7 +85,7 @@
       180,
       85.051129
     ],
-    "smp:maxzoom": 16,
+    "smp:maxzoom": 0,
     "smp:sourceFolders": {
       "crimea": "s/0",
       "maplibre": "s/1"

@@ -247,6 +247,89 @@ test('Inline GeoJSON is not removed from style', async () => {
   ).toBe(16)
 })
 
+/** @returns {import('geojson').FeatureCollection} */
+function pointFeatureCollection() {
+  return {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        properties: {},
+        geometry: { type: 'Point', coordinates: [0, 0] },
+      },
+    ],
+  }
+}
+
+test('GeoJSON source maxzoom is preserved', async () => {
+  /** @type {import('@maplibre/maplibre-gl-style-spec').StyleSpecification} */
+  const styleIn = {
+    version: 8,
+    sources: {
+      withMaxzoom: {
+        type: 'geojson',
+        data: pointFeatureCollection(),
+        maxzoom: 20,
+      },
+      withoutMaxzoom: { type: 'geojson', data: pointFeatureCollection() },
+    },
+    layers: [
+      { id: 'a', type: 'circle', source: 'withMaxzoom' },
+      { id: 'b', type: 'circle', source: 'withoutMaxzoom' },
+    ],
+  }
+  const writer = new Writer(styleIn)
+  const smpPromise = streamToBuffer(writer.outputStream)
+  writer.finish()
+  const reader = new Reader(
+    await ZipReader.from(new BufferSource(await smpPromise)),
+  )
+  const styleOut = await reader.getStyle()
+
+  expect(styleOut.sources.withMaxzoom).toHaveProperty('maxzoom', 20)
+  expect(styleOut.sources.withoutMaxzoom).not.toHaveProperty('maxzoom')
+  expect(styleOut.metadata['smp:maxzoom'], 'GeoJSON-only maxzoom').toBe(16)
+})
+
+test('Tile sources, not GeoJSON, set smp:maxzoom and zoom', async () => {
+  /** @type {import('@maplibre/maplibre-gl-style-spec').StyleSpecification} */
+  const styleIn = {
+    version: 8,
+    sources: {
+      tiles: {
+        type: 'vector',
+        tiles: ['https://example.com/v/{z}/{x}/{y}.mvt'],
+      },
+      overlay: { type: 'geojson', data: pointFeatureCollection() },
+    },
+    layers: [
+      { id: 'tiles', type: 'line', source: 'tiles', 'source-layer': 'l' },
+      { id: 'overlay', type: 'circle', source: 'overlay' },
+    ],
+  }
+  const writer = new Writer(styleIn)
+  const smpPromise = streamToBuffer(writer.outputStream)
+  const bounds = /** @type {BBox} */ ([-1, -1, 1, 1])
+  for (const { x, y, z } of tileIterator({ maxzoom: 5, bounds })) {
+    await writer.addTile(randomWebStream({ size: 64 }), {
+      x,
+      y,
+      z,
+      sourceId: 'tiles',
+      format: 'mvt',
+    })
+  }
+  writer.finish()
+  const reader = new Reader(
+    await ZipReader.from(new BufferSource(await smpPromise)),
+  )
+  const styleOut = await reader.getStyle()
+
+  expect(styleOut.metadata['smp:maxzoom']).toBe(5)
+  expect(styleOut.zoom).toBe(3)
+  expect(styleOut.sources.overlay).not.toHaveProperty('maxzoom')
+})
+
 test('Un-added source is stripped from output', async () => {
   const styleInUrl = new URL(
     './fixtures/valid-styles/maplibre-unlabelled.input.json',
@@ -1183,6 +1266,8 @@ async function compareAndSnapshotStyle({ styleInUrl, styleOut }) {
     } catch (e) {
       if (e instanceof Error && 'code' in e && e.code === 'ENOENT') {
         await writeTextFile(snapshotUrl, JSON.stringify(styleOut, null, 2))
+      } else {
+        throw e
       }
     }
   }

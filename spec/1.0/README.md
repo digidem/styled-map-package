@@ -182,7 +182,7 @@ The `style.json` `metadata` object MAY contain the following SMP-specific proper
 - Type: Non-negative integer
 - Value MUST be between 0 and 30 (inclusive).
 - SHOULD equal the maximum zoom level of any tile source in the package.
-- For GeoJSON-only packages, the value SHOULD be 16 (the default GeoJSON rendering max zoom).
+- For GeoJSON-only packages, the value SHOULD be 16. GeoJSON has no inherent maximum zoom, so this is a conventional value rather than a limit on the data.
 
 #### 4.3.3 `smp:sourceFolders` (OPTIONAL)
 
