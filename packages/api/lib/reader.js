@@ -192,7 +192,7 @@ export class Reader {
    * @param {string | import('@gmaclennan/zip-reader').RandomAccessSource | import('@gmaclennan/zip-reader').ZipReader} source
    *   Path to a styled map package (`.smp`) file (Node.js only), a
    *   RandomAccessSource such as `BlobSource`, or a ZipReader instance. A
-   *   ZipReader must be opened with `{ skipUniqueEntryCheck: true }` to read
+   *   ZipReader must be opened with `{ allowAliasedEntries: true }` to read
    *   packages written with `dedupe: true`. The Reader only closes sources it
    *   opened from a file path.
    * @param {ReaderOptions} [options]

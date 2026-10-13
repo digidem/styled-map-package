@@ -41,7 +41,7 @@ import { Reader } from 'styled-map-package-api/reader'
 const reader = new Reader(new BlobSource(file))
 ```
 
-If you construct the `ZipReader` yourself, open it with `{ skipUniqueEntryCheck: true }`, otherwise packages written with `dedupe: true` fail to open.
+If you construct the `ZipReader` yourself, open it with `{ allowAliasedEntries: true }`, otherwise packages written with `dedupe: true` fail to open.
 
 ### Writing an SMP file
 

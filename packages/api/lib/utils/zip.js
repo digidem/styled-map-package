@@ -40,7 +40,7 @@ function isZipReader(value) {
  */
 export async function openZip(sourceOrZip) {
   if (isRandomAccessSource(sourceOrZip)) {
-    return ZipReader.from(sourceOrZip, { skipUniqueEntryCheck: true })
+    return ZipReader.from(sourceOrZip, { allowAliasedEntries: true })
   }
   if (isZipReader(sourceOrZip)) return sourceOrZip
   throw Object.assign(
@@ -53,7 +53,7 @@ export async function openZip(sourceOrZip) {
 
 /**
  * Explain the error zip-reader throws for deduplicated tiles when the caller
- * opened the ZipReader without `skipUniqueEntryCheck`. Other errors are
+ * opened the ZipReader without `allowAliasedEntries`. Other errors are
  * returned unchanged.
  *
  * @param {unknown} error
@@ -62,14 +62,18 @@ export async function openZip(sourceOrZip) {
 export function explainZipError(error) {
   if (
     !(error instanceof Error) ||
-    !error.message.includes('Duplicate local file header offset')
+    !('code' in error) ||
+    error.code !== 'DUPLICATE_LOCAL_FILE_HEADER'
   ) {
     return error
   }
-  return new Error(
-    'This styled map package stores deduplicated tiles, which ZipReader rejects by default. ' +
-      'Pass a RandomAccessSource (e.g. `new BlobSource(file)`) instead of a ZipReader, ' +
-      'or open the ZipReader with `{ skipUniqueEntryCheck: true }`.',
-    { cause: error },
+  return Object.assign(
+    new Error(
+      'This styled map package stores deduplicated tiles, which ZipReader rejects by default. ' +
+        'Pass a RandomAccessSource (e.g. `new BlobSource(file)`) instead of a ZipReader, ' +
+        'or open the ZipReader with `{ allowAliasedEntries: true }`.',
+      { cause: error },
+    ),
+    { code: error.code },
   )
 }

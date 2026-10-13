@@ -1569,7 +1569,7 @@ describe('validate — ZipReader input', () => {
     const { BufferSource } =
       await import('@gmaclennan/zip-reader/buffer-source')
     const zipReader = await ZipReader.from(new BufferSource(smpBuf))
-    await expect(validate(zipReader)).rejects.toThrow(/skipUniqueEntryCheck/)
+    await expect(validate(zipReader)).rejects.toThrow(/allowAliasedEntries/)
   })
 
   test('rejects an unsupported source type', async () => {
