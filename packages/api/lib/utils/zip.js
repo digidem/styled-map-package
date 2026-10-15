@@ -1,35 +1,8 @@
-import { ZipReader } from '@gmaclennan/zip-reader'
-
-/**
- * @param {unknown} value
- * @returns {value is import('@gmaclennan/zip-reader').RandomAccessSource}
- */
-function isRandomAccessSource(value) {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'read' in value &&
-    typeof value.read === 'function' &&
-    'size' in value &&
-    typeof value.size === 'number'
-  )
-}
-
-/**
- * Duck-typed because a caller's copy of zip-reader may be a different module
- * instance, so `instanceof ZipReader` can fail.
- *
- * @param {unknown} value
- * @returns {value is import('@gmaclennan/zip-reader').ZipReader}
- */
-function isZipReader(value) {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    Symbol.asyncIterator in value &&
-    typeof value[Symbol.asyncIterator] === 'function'
-  )
-}
+import {
+  isRandomAccessSource,
+  isZipReader,
+  ZipReader,
+} from '@gmaclennan/zip-reader'
 
 /**
  * Open a random access source as a ZipReader that accepts deduplicated
@@ -54,7 +27,8 @@ export async function openZip(sourceOrZip) {
 /**
  * Explain the error zip-reader throws for deduplicated tiles when the caller
  * opened the ZipReader without `allowAliasedEntries`. Other errors are
- * returned unchanged.
+ * returned unchanged. Matches on `code` because `instanceof
+ * DuplicateLocalFileHeader` fails across copies of zip-reader.
  *
  * @param {unknown} error
  * @returns {unknown}
