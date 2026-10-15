@@ -1016,7 +1016,7 @@ test('Dedupe: duplicate tiles are stored once and read back correctly', async ()
   // Iterate ZIP entries and verify that duplicate tiles share the same
   // local file header offset (i.e. the data is truly stored only once).
   const zipRaw = await ZipReader.from(new BufferSource(smpDedupe), {
-    skipUniqueEntryCheck: true,
+    allowAliasedEntries: true,
   })
   /** @type {Array<{ name: string, crc32: number, offset: number }>} */
   const tileZipEntries = []
@@ -1061,11 +1061,7 @@ test('Dedupe: duplicate tiles are stored once and read back correctly', async ()
   ).not.toBe(allOffsets[1])
 
   // Read back deduplicated SMP and verify all tiles return correct data
-  const reader = new Reader(
-    await ZipReader.from(new BufferSource(smpDedupe), {
-      skipUniqueEntryCheck: true,
-    }),
-  )
+  const reader = new Reader(new BufferSource(smpDedupe))
   const readerHelper = new ReaderHelper(reader)
 
   for (let i = 0; i < tiles.length; i++) {
@@ -1075,6 +1071,15 @@ test('Dedupe: duplicate tiles are stored once and read back correctly', async ()
       expectedHash,
     )
   }
+
+  const zipWithoutOption = await ZipReader.from(new BufferSource(smpDedupe))
+  const readerWithoutOption = new Reader(zipWithoutOption)
+  await expect(readerWithoutOption.opened()).rejects.toThrow(
+    /allowAliasedEntries/,
+  )
+  await expect(readerWithoutOption.opened()).rejects.toMatchObject({
+    code: 'DUPLICATE_LOCAL_FILE_HEADER',
+  })
 })
 
 test('Dedupe: no duplicates produces same result as non-dedupe', async () => {
@@ -1101,11 +1106,7 @@ test('Dedupe: no duplicates produces same result as non-dedupe', async () => {
   writer.finish()
 
   const smp = await smpPromise
-  const reader = new Reader(
-    await ZipReader.from(new BufferSource(smp), {
-      skipUniqueEntryCheck: true,
-    }),
-  )
+  const reader = new Reader(new BufferSource(smp))
   const readerHelper = new ReaderHelper(reader)
 
   for (const [tileId, expectedHash] of tileHashes) {
