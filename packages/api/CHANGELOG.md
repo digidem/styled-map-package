@@ -1,5 +1,17 @@
 # styled-map-package-api
 
+## 6.3.0
+
+### Minor Changes
+
+- [#139](https://github.com/digidem/styled-map-package/pull/139) [`4f18f6a`](https://github.com/digidem/styled-map-package/commit/4f18f6ae1d6f10d3426666fd12df0c7bcc31bf69) Thanks [@gmaclennan](https://github.com/gmaclennan)! - `Reader` and `validate()` accept a `RandomAccessSource` from `@gmaclennan/zip-reader`, such as `new BlobSource(file)` in the browser, and open it so that packages written with `dedupe: true` can be read. Passing a `ZipReader` still works, but it must be opened with `{ allowAliasedEntries: true }` to read deduplicated tiles; without it, `Reader` and `validate()` now throw an error saying so ([#125](https://github.com/digidem/styled-map-package/issues/125)).
+
+  Updates `@gmaclennan/zip-reader` to v2.1, which permits deduplicated tiles only when they are exact aliases of each other, and rejects archives whose entries overlap.
+
+### Patch Changes
+
+- [#141](https://github.com/digidem/styled-map-package/pull/141) [`7d69969`](https://github.com/digidem/styled-map-package/commit/7d69969b47ac09ed7d4d182e3ebf7c2b6b648169) Thanks [@gmaclennan](https://github.com/gmaclennan)! - `validate()` closes the file it opened when the file is not a valid ZIP archive, instead of leaving it open until garbage collection.
+
 ## 6.2.0
 
 ### Minor Changes
