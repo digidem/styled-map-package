@@ -149,6 +149,7 @@ export async function validate(source, options = {}) {
       zip = await openZip(source)
     }
   } catch (err) {
+    if (fileSource) await fileSource.close()
     if (/** @type {any} */ (err)?.code === 'ERR_INVALID_ARG_TYPE') throw err
     const message = err instanceof Error ? err.message : String(err)
     if (/** @type {any} */ (err)?.code === 'ENOENT') {
